@@ -153,7 +153,9 @@ const parseDurationToMinutes = (timeStr) => {
 
   return Math.round(totalMinutes);
 };
-
+const durationToHours = (timeStr) => {
+  return parseDurationToMinutes(timeStr) / 60;
+};
 const formatMinutesToDuration = (minutes) => {
   if (minutes === 0) return "";
   const h = Math.floor(minutes / 60);
@@ -756,9 +758,10 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 function DashboardView({ data, currentSM, users }) {
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [generatedContent, setGeneratedContent] = useState(null);
+  const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('https://default414ad49ffdc94181bd7eba81a9cdb7.7f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3af37b0ffc76482586cb2c84319d8242/triggers/manual/paths/invoke?api-version=1'); // Added this line to fix the crash
   const [emailConfig, setEmailConfig] = useState({
     address: 'admin@company.com',
-    to: 'team@company.com'
+    to: 'smscrum@dhyan.com'
   });
 
   const dailyData = useMemo(() => data.filter(d => d.date === selectedDate), [data, selectedDate]);
@@ -1123,7 +1126,7 @@ except Exception as e:
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {isLeave ? '-' : row ? (
                         <ul className="list-disc pl-4 space-y-1">
-                           {(row.yesterdayWork || []).map((t, i) => (
+                          {(row.yesterdayWork || []).map((t, i) => (
                             <li key={i}>
                               {t.task}
                               <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
@@ -1214,12 +1217,6 @@ except Exception as e:
 
               {generatedContent === 'email' && (
                 <div className="space-y-6">
-                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded">
-                    <p className="text-sm font-semibold">Direct Outlook send from browser is limited.</p>
-                    <p className="text-xs mt-1">
-                      To send directly from this app, add a backend service with Microsoft Graph OAuth (client-side JS alone cannot securely send mail as your organization account).
-                    </p>
-                  </div>
                   {/* Python Script Section */}
                   <div className="bg-white p-6 rounded shadow border--4 border-green-500">
                     <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
