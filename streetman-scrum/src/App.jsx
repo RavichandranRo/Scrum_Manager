@@ -763,6 +763,13 @@ function DashboardView({ data, currentSM, users }) {
     address: 'admin@company.com',
     to: 'smscrum@dhyan.com'
   });
+  const [teamsReminderConfig, setTeamsReminderConfig] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('streetman_teams_reminder_config') || '{"recipients":""}');
+    } catch {
+      return { recipients: '' };
+    }
+  });
 
   const dailyData = useMemo(() => data.filter(d => d.date === selectedDate), [data, selectedDate]);
 
@@ -820,8 +827,16 @@ function DashboardView({ data, currentSM, users }) {
 
   const generateReminderText = () => {
     if (missingUsers.length === 0) return "All members have submitted. Good job!";
-    return `Hello team, awaiting updates from: ${missingUsers.map(u => u.name).join(', ')}. Please submit ASAP.`;
+    const recipients = teamsReminderConfig.recipients
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const recipientText = recipients.length > 0 ? `Recipients: ${recipients.join(', ')}` : '';
+    return `Hello team, awaiting updates from: ${missingUsers.map(u => u.name).join(', ')}. Please submit ASAP.${recipientText ? `\n${recipientText}` : ''}`;
   };
+  useEffect(() => {
+    localStorage.setItem('streetman_teams_reminder_config', JSON.stringify(teamsReminderConfig));
+  }, [teamsReminderConfig]);
   const weeklyTrend = useMemo(() => {
     const end = new Date(selectedDate);
     const start = new Date(end);
@@ -886,8 +901,22 @@ function DashboardView({ data, currentSM, users }) {
       alert(`Reminder schedule (${hhmm}) triggered for ${missingUsers.length} pending update(s).`);
       localStorage.setItem(`streetman_reminder_${todayKey}`, '1');
       navigator.clipboard.writeText(generateReminderText()).catch(() => { });
+      const recipients = teamsReminderConfig.recipients
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      if (recipients.length > 0) {
+        const subject = encodeURIComponent(`Scrum Reminder - ${formatDate(selectedDate)}`);
+        const body = encodeURIComponent(`⏰ Scrum Reminder (${hhmm})\n\n${reminderText}`);
+        const mailtoUrl = `mailto:${encodeURIComponent(recipients.join(','))}?subject=${subject}&body=${body}`;
+        window.open(mailtoUrl, '_blank');
+        alert(`Reminder email draft opened for ${recipients.length} recipient(s).`);
+      } else {
+        alert(`Reminder schedule (${hhmm}) triggered for ${missingUsers.length} pending update(s). Configure recipient mail IDs to draft emails.`);
+      }
     }
-  }, [currentSM, missingUsers]);
+  }, [currentSM, missingUsers, teamsReminderConfig, selectedDate]);
 
   const sendTeamsWebhook = async (type) => {
     if (!teamsWebhookUrl.trim()) {
@@ -1099,6 +1128,18 @@ except Exception as e:
             Copy current reminder
           </button>
         </div>
+        <div className="grid md:grid-cols-2 gap-3 mt-4">
+          <input
+            type="text"
+            value={teamsReminderConfig.recipients}
+            onChange={(e) => setTeamsReminderConfig((prev) => ({ ...prev, recipients: e.target.value }))}
+            placeholder="Recipient mail IDs (comma-separated)"
+            className="border border-slate-300 rounded p-2 text-sm md:col-span-2"
+          />
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2">
+          Auto-reminder opens an email draft when dashboard is open at 11:30 / 18:30 and recipients are configured.
+        </p>
       </div>
 
       <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden">
