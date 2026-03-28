@@ -88,8 +88,10 @@ try {
 const appId = "streetman-scrum-automation";
 
 // --- TEAM CONFIGURATION ---
-const TEAMS = ['StreetMan Core QA', 'StreetMan Core Dev'];
 const PROJECTS = ['SMNGUI', 'Ohli Hardware', 'Bosun Module', 'General'];
+const MEMBER_TEAMS = ['StreetMan Core QA', 'StreetMan Core Dev', 'Hardware'];
+const CUSTOM_PROJECTS_STORAGE_KEY = 'streetman_custom_projects';
+const CUSTOM_USERS_STORAGE_KEY = 'streetman_custom_users';
 
 // PROJECT MAPPING FOR EXPORT
 const PROJECT_CATEGORIES = {
@@ -100,19 +102,19 @@ const PROJECT_CATEGORIES = {
 };
 
 // HARDCODED TEAM MEMBERS
-const USERS = [
-  { id: '1349', name: 'Ravichandran C', team: 'StreetMan Core QA', role: 'ADMIN' },
-  { id: '1350', name: 'Keerthana M', team: 'StreetMan Core QA', role: 'MEMBER' },
-  { id: '1351', name: 'Manirathinam S', team: 'StreetMan Core QA', role: 'MEMBER' },
-  { id: '1352', name: 'Karthika S', team: 'StreetMan Core QA', role: 'MEMBER' },
-  { id: '1353', name: 'Vignesh S', team: 'StreetMan Core QA', role: 'MEMBER' },
-  { id: '1354', name: 'Shanmugam S', team: 'StreetMan Core', role: 'MEMBER' },
-  { id: '1355', name: 'Keerthana S', team: 'StreetMan Core Dev', role: 'MEMBER' },
-  { id: '1356', name: 'Gobi S', team: 'StreetMan Core Dev', role: 'MEMBER' },
-  { id: '1357', name: 'Surendar S', team: 'StreetMan Core Dev', role: 'MEMBER' },
-  { id: '1358', name: 'Nithishkumar M', team: 'StreetMan Core Dev', role: 'MEMBER' },
-  { id: '1359', name: 'Thinakaran S', team: 'StreetMan Core Dev', role: 'MEMBER' },
-  { id: '1360', name: 'Balamurugan B', team: 'Hardware', role: 'MEMBER' }
+const DEFAULT_USERS = [
+  { id: '1349', name: 'Ravichandran C', team: 'StreetMan Core QA', role: 'ADMIN', pin: '1234' },
+  { id: '1350', name: 'Keerthana M', team: 'StreetMan Core QA', role: 'MEMBER', pin: '1350' },
+  { id: '1351', name: 'Manirathinam S', team: 'StreetMan Core QA', role: 'MEMBER', pin: '1351' },
+  { id: '1352', name: 'Karthika S', team: 'StreetMan Core QA', role: 'MEMBER', pin: '1352' },
+  { id: '1353', name: 'Vignesh S', team: 'StreetMan Core QA', role: 'MEMBER', pin: '1353' },
+  { id: '1354', name: 'Shanmugam S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1354' },
+  { id: '1355', name: 'Keerthana S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1355' },
+  { id: '1356', name: 'Gobi S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1356' },
+  { id: '1357', name: 'Surendar S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1357' },
+  { id: '1358', name: 'Nithishkumar M', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1358' },
+  { id: '1359', name: 'Thinakaran S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1359' },
+  { id: '1360', name: 'Balamurugan B', team: 'Hardware', role: 'MEMBER', pin: '1360' }
 ];
 
 // --- HELPER FUNCTIONS ---
@@ -137,12 +139,19 @@ const checkTimeWindows = () => {
 
 const parseDurationToMinutes = (timeStr) => {
   if (!timeStr) return 0;
+  const value = String(timeStr).trim().toLowerCase();
+
+  if (/^\d+(\.\d+)?$/.test(value)) {
+    return Math.round(parseFloat(value) * 60);
+  }
+
+  const hoursMatch = value.match(/(\d+(\.\d+)?)\s*h/);
+  const minsMatch = value.match(/(\d+(\.\d+)?)\s*m/);
   let totalMinutes = 0;
-  const hoursMatch = timeStr.match(/(\d+)h/);
-  const minsMatch = timeStr.match(/(\d+)m/);
-  if (hoursMatch) totalMinutes += parseInt(hoursMatch[1]) * 60;
-  if (minsMatch) totalMinutes += parseInt(minsMatch[1]);
-  return totalMinutes;
+  if (hoursMatch) totalMinutes += parseFloat(hoursMatch[1]) * 60;
+  if (minsMatch) totalMinutes += parseFloat(minsMatch[1]);
+
+  return Math.round(totalMinutes);
 };
 
 const formatMinutesToDuration = (minutes) => {
@@ -160,12 +169,35 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('login');
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
+  const [users, setUsers] = useState(() => {
+    try {
+      const storedUsers = JSON.parse(localStorage.getItem(CUSTOM_USERS_STORAGE_KEY) || '[]');
+      return [...DEFAULT_USERS, ...storedUsers];
+    } catch {
+      return DEFAULT_USERS;
+    }
+  });
+  const [customProjects, setCustomProjects] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CUSTOM_PROJECTS_STORAGE_KEY) || '[]');
+    } catch {
+      return [];
+    }
+  });
 
   const [statusData, setStatusData] = useState([]);
   const [appConfig, setAppConfig] = useState({ currentScrumMasterId: '1350' });
 
   const [authError, setAuthError] = useState(null);
   const [dbError, setDbError] = useState(null);
+  useEffect(() => {
+    const customUsers = users.filter((u) => !DEFAULT_USERS.some((d) => d.id === u.id));
+    localStorage.setItem(CUSTOM_USERS_STORAGE_KEY, JSON.stringify(customUsers));
+  }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem(CUSTOM_PROJECTS_STORAGE_KEY, JSON.stringify(customProjects));
+  }, [customProjects]);
 
   const isAdmin = currentUserProfile?.role === 'ADMIN';
   const isScrumMaster = currentUserProfile?.id === appConfig.currentScrumMasterId || isAdmin;
@@ -224,12 +256,10 @@ export default function App() {
 
   // --- HANDLERS ---
   const handleLogin = (profile) => {
-    if (profile.role === 'ADMIN') {
-      const pin = window.prompt("Enter Admin PIN :");
-      if (pin !== "1234") {
-        alert("Incorrect PIN. Access Denied.");
-        return;
-      }
+    const pin = window.prompt(`Enter PIN for ${profile.name}:`);
+    if (!pin || pin !== profile.pin) {
+      alert("Incorrect credentials. Access Denied.");
+      return;
     }
     setCurrentUserProfile(profile);
     setActiveTab('input');
@@ -269,7 +299,7 @@ export default function App() {
           </div>
 
           <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-            {USERS.map(u => (
+            {users.map(u => (
               <button
                 key={u.id}
                 onClick={() => handleLogin(u)}
@@ -348,7 +378,7 @@ export default function App() {
                     <>
                       <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase bg-slate-50">Switch Account</div>
                       <div className="max-h-48 overflow-y-auto">
-                        {USERS.filter(u => u.id !== currentUserProfile.id).map(u => (
+                        {users.filter(u => u.id !== currentUserProfile.id).map(u => (
                           <button
                             key={u.id}
                             onClick={() => handleLogin(u)}
@@ -381,13 +411,16 @@ export default function App() {
             <InputView
               currentUserProfile={currentUserProfile}
               existingData={statusData}
+              customProjects={customProjects}
+              setCustomProjects={setCustomProjects}
             />
           )}
-          {activeTab === 'dashboard' && isScrumMaster && <DashboardView data={statusData} currentSM={currentUserProfile} />}
+          {activeTab === 'dashboard' && isScrumMaster && <DashboardView data={statusData} currentSM={currentUserProfile} users={users} />}
           {activeTab === 'reports' && isScrumMaster && <ReportsView data={statusData} />}
           {activeTab === 'admin' && isAdmin && (
             <AdminView
-              users={USERS}
+              users={users}
+              setUsers={setUsers}
               config={appConfig}
               setConfig={setAppConfig}
             />
@@ -408,7 +441,7 @@ export default function App() {
 const ErrorScreen = ({ title, message }) => (
   <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-500 flex-col gap-4 p-4">
     <AlertTriangle size={48} className="text-red-500" />
-    <div className="text-center max-w-lg bg-white p-6 rounded-xl shadow-lg border-l-4 border-red-500">
+    <div className="text-center max-w-lg bg-white p-6 rounded-xl shadow-lg border--4 border-red-500">
       <p className="font-bold text-slate-800 text-xl mb-2">{title}</p>
       <p className="text-sm text-slate-600">{message}</p>
     </div>
@@ -419,8 +452,8 @@ const NavButton = ({ active, onClick, children, icon }) => (
   <button
     onClick={onClick}
     className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${active
-        ? 'bg-indigo-700 text-white shadow-sm'
-        : 'text-indigo-100 hover:bg-indigo-800'
+      ? 'bg-indigo-700 text-white shadow-sm'
+      : 'text-indigo-100 hover:bg-indigo-800'
       }`}
   >
     {icon}
@@ -428,7 +461,7 @@ const NavButton = ({ active, onClick, children, icon }) => (
   </button>
 );
 
-function InputView({ currentUserProfile, existingData }) {
+function InputView({ currentUserProfile, existingData, customProjects, setCustomProjects }) {
   const today = getTodayString();
   const [loading, setLoading] = useState(true);
   const { isDayStartOpen, isDayEndOpen } = checkTimeWindows();
@@ -438,24 +471,25 @@ function InputView({ currentUserProfile, existingData }) {
   const isOnLeave = existingEntry?.status === 'LEAVE';
 
   const [formData, setFormData] = useState({
-    yesterdayWork: [{ task: '', project: 'SMNGUI', time: '0h', status: 'Completed' }],
-    todayPlan: [{ task: '', time: '0m' }],
+    yesterdayWork: [{ task: '', project: 'SMNGUI', time: '0h', status: 'Completed', priority: 'Medium', blockerReason: '' }],
+    todayPlan: [{ task: '', project: 'SMNGUI', time: '0m', priority: 'Medium', blockerReason: '' }],
     todayActuals: []
   });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
+  const allProjects = useMemo(() => [...PROJECTS, ...customProjects], [customProjects]);
 
   useEffect(() => {
     if (existingEntry) {
       setFormData({
         yesterdayWork: existingEntry.yesterdayWork || [],
         todayPlan: existingEntry.todayPlan || [],
-        todayActuals: existingEntry.todayActuals?.length > 0 ? existingEntry.todayActuals : (existingEntry.todayPlan || []).map(p => ({ ...p, status: 'Completed', actualTime: p.time }))
+        todayActuals: existingEntry.todayActuals?.length > 0 ? existingEntry.todayActuals : (existingEntry.todayPlan || []).map(p => ({ ...p, status: 'Completed', actualTime: p.time, blockerReason: p.blockerReason || '' }))
       });
     } else {
       setFormData({
-        yesterdayWork: [{ task: '', project: 'SMNGUI', time: '', status: 'Completed' }],
-        todayPlan: [{ task: '', time: '' }],
+        yesterdayWork: [{ task: '', project: 'SMNGUI', time: '', status: 'Completed', priority: 'Medium', blockerReason: '' }],
+        todayPlan: [{ task: '', project: 'SMNGUI', time: '', priority: 'Medium', blockerReason: '' }],
         todayActuals: []
       });
     }
@@ -467,12 +501,18 @@ function InputView({ currentUserProfile, existingData }) {
     newSection[index][field] = value;
     setFormData({ ...formData, [section]: newSection });
   };
+  const addCustomProject = (value) => {
+    const normalized = value.trim();
+    if (!normalized) return;
+    if ([...PROJECTS, ...customProjects].some((p) => p.toLowerCase() === normalized.toLowerCase())) return;
+    setCustomProjects((prev) => [...prev, normalized]);
+  };
 
   const addTask = (section) => {
     let item;
-    if (section === 'yesterdayWork') item = { task: '', project: 'SMNGUI', time: '', status: 'Completed' };
-    else if (section === 'todayPlan') item = { task: '', time: '' };
-    else item = { task: '', status: 'Completed', actualTime: '' };
+    if (section === 'yesterdayWork') item = { task: '', project: 'SMNGUI', time: '', status: 'Completed', priority: 'Medium', blockerReason: '' };
+    else if (section === 'todayPlan') item = { task: '', project: 'SMNGUI', time: '', priority: 'Medium', blockerReason: '' };
+    else item = { task: '', project: 'SMNGUI', priority: 'Medium', status: 'Completed', blockerReason: '', actualTime: '' };
 
     setFormData({ ...formData, [section]: [...formData[section], item] });
   };
@@ -553,6 +593,9 @@ function InputView({ currentUserProfile, existingData }) {
               {message.text}
             </div>
           )}
+          <datalist id="project-options">
+            {allProjects.map((projectName) => <option key={projectName} value={projectName} />)}
+          </datalist>
 
           <div className={`space-y-4 rounded-xl p-4 border ${!isDayStartOpen ? 'bg-slate-100 border-slate-200 opacity-80' : 'bg-blue-50/50 border-blue-100'}`}>
             <div className="flex items-center justify-between border-b border-slate-300 pb-2">
@@ -569,10 +612,29 @@ function InputView({ currentUserProfile, existingData }) {
                 <div className="flex-1 w-full">
                   <input disabled={!isDayStartOpen} type="text" placeholder="What did you finish?" value={item.task} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'task', e.target.value)} className="w-full rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" required />
                 </div>
-                <select disabled={!isDayStartOpen} value={item.project} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'project', e.target.value)} className="w-full sm:w-32 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50">
-                  {PROJECTS.map(p => <option key={p} value={p}>{p}</option>)}
+                <input
+                  disabled={!isDayStartOpen}
+                  type="text"
+                  list="project-options"
+                  value={item.project}
+                  onChange={(e) => handleTaskChange('yesterdayWork', idx, 'project', e.target.value)}
+                  onBlur={(e) => addCustomProject(e.target.value)}
+                  placeholder="Project"
+                  className="w-full sm:w-40 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50"
+                  required
+                />
+                <input disabled={!isDayStartOpen} type="text" placeholder="Effort (e.g. 1.5h or 90m)" value={item.time} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'time', e.target.value)} className="w-full sm:w-36 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" required />
+                <select
+                  disabled={!isDayStartOpen}
+                  value={item.priority || 'Medium'}
+                  onChange={(e) => handleTaskChange('yesterdayWork', idx, 'priority', e.target.value)}
+                  className="w-full sm:w-28 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50"
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
                 </select>
-                <input disabled={!isDayStartOpen} type="text" placeholder="Effort (4h)" value={item.time} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'time', e.target.value)} className="w-full sm:w-24 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" required />
                 {isDayStartOpen && <button type="button" onClick={() => removeTask('yesterdayWork', idx)} className="text-red-400 hover:text-red-600 p-2"><LogOut size={14} /></button>}
               </div>
             ))}
@@ -584,7 +646,37 @@ function InputView({ currentUserProfile, existingData }) {
             {formData.todayPlan.map((item, idx) => (
               <div key={idx} className="flex gap-2 bg-white p-2 rounded border border-slate-200">
                 <input disabled={!isDayStartOpen} type="text" placeholder="Planned task..." value={item.task} onChange={(e) => handleTaskChange('todayPlan', idx, 'task', e.target.value)} className="flex-1 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" required />
-                <input disabled={!isDayStartOpen} type="text" placeholder="Est Time" value={item.time} onChange={(e) => handleTaskChange('todayPlan', idx, 'time', e.target.value)} className="w-24 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" required />
+                <input
+                  disabled={!isDayStartOpen}
+                  type="text"
+                  list="project-options"
+                  value={item.project || 'SMNGUI'}
+                  onChange={(e) => handleTaskChange('todayPlan', idx, 'project', e.target.value)}
+                  onBlur={(e) => addCustomProject(e.target.value)}
+                  placeholder="Project"
+                  className="w-36 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50"
+                  required
+                />
+                <input disabled={!isDayStartOpen} type="text" placeholder="Est Time (e.g. 2.5h)" value={item.time} onChange={(e) => handleTaskChange('todayPlan', idx, 'time', e.target.value)} className="w-40 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" required />
+                <select
+                  disabled={!isDayStartOpen}
+                  value={item.priority || 'Medium'}
+                  onChange={(e) => handleTaskChange('todayPlan', idx, 'priority', e.target.value)}
+                  className="w-28 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50"
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Critical">Critical</option>
+                </select>
+                <input
+                  disabled={!isDayStartOpen}
+                  type="text"
+                  placeholder="Blocker reason"
+                  value={item.blockerReason || ''}
+                  onChange={(e) => handleTaskChange('todayPlan', idx, 'blockerReason', e.target.value)}
+                  className="w-44 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50"
+                />
                 {isDayStartOpen && <button type="button" onClick={() => removeTask('todayPlan', idx)} className="text-red-400 hover:text-red-600 p-2"><LogOut size={14} /></button>}
               </div>
             ))}
@@ -604,12 +696,41 @@ function InputView({ currentUserProfile, existingData }) {
                   <div className="flex-1 w-full">
                     <input disabled={!isDayEndOpen} type="text" value={item.task} onChange={(e) => handleTaskChange('todayActuals', idx, 'task', e.target.value)} className="w-full rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" />
                   </div>
+                  <input
+                    disabled={!isDayEndOpen}
+                    type="text"
+                    list="project-options"
+                    value={item.project || 'SMNGUI'}
+                    onChange={(e) => handleTaskChange('todayActuals', idx, 'project', e.target.value)}
+                    onBlur={(e) => addCustomProject(e.target.value)}
+                    placeholder="Project"
+                    className="w-full sm:w-32 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50"
+                  />
+                  <select
+                    disabled={!isDayEndOpen}
+                    value={item.priority || 'Medium'}
+                    onChange={(e) => handleTaskChange('todayActuals', idx, 'priority', e.target.value)}
+                    className="w-full sm:w-28 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
                   <select disabled={!isDayEndOpen} value={item.status} onChange={(e) => handleTaskChange('todayActuals', idx, 'status', e.target.value)} className="w-full sm:w-32 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50">
                     <option value="In Progress">In Progress</option>
                     <option value="Completed">Completed</option>
                     <option value="Blocked">Blocked</option>
                   </select>
-                  <input disabled={!isDayEndOpen} type="text" placeholder="Actual Time" value={item.actualTime} onChange={(e) => handleTaskChange('todayActuals', idx, 'actualTime', e.target.value)} className="w-full sm:w-24 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" />
+                  <input disabled={!isDayEndOpen} type="text" placeholder="Actual (e.g. 1.25h)" value={item.actualTime} onChange={(e) => handleTaskChange('todayActuals', idx, 'actualTime', e.target.value)} className="w-full sm:w-36 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" />
+                  <input
+                    disabled={!isDayEndOpen}
+                    type="text"
+                    placeholder="Blocker reason"
+                    value={item.blockerReason || ''}
+                    onChange={(e) => handleTaskChange('todayActuals', idx, 'blockerReason', e.target.value)}
+                    className="w-full sm:w-44 rounded border-slate-300 p-2 text-sm disabled:bg-slate-50"
+                  />
                   {isDayEndOpen && <button type="button" onClick={() => removeTask('todayActuals', idx)} className="text-red-400 hover:text-red-600 p-2"><LogOut size={14} /></button>}
                 </div>
               ))}
@@ -632,7 +753,7 @@ function InputView({ currentUserProfile, existingData }) {
 }
 
 // --- VIEW 2: Scrum Dashboard ---
-function DashboardView({ data, currentSM }) {
+function DashboardView({ data, currentSM, users }) {
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [generatedContent, setGeneratedContent] = useState(null);
   const [emailConfig, setEmailConfig] = useState({
@@ -645,7 +766,7 @@ function DashboardView({ data, currentSM }) {
   // Calculate missing users (Exclude users marked as LEAVE)
   const missingUsers = useMemo(() => {
     const submittedIds = dailyData.map(d => d.userId);
-    return USERS.filter(u => {
+    return users.filter(u => {
       // Check if already submitted OR marked as Leave
       const submission = dailyData.find(d => d.userId === u.id);
       const isLeave = submission?.status === 'LEAVE';
@@ -698,7 +819,93 @@ function DashboardView({ data, currentSM }) {
     if (missingUsers.length === 0) return "All members have submitted. Good job!";
     return `Hello team, awaiting updates from: ${missingUsers.map(u => u.name).join(', ')}. Please submit ASAP.`;
   };
+  const weeklyTrend = useMemo(() => {
+    const end = new Date(selectedDate);
+    const start = new Date(end);
+    start.setDate(end.getDate() - 6);
+    const teamUsers = users.filter((u) => u.role !== 'ADMIN');
+    const teamMemberIds = new Set(teamUsers.map((u) => u.id));
+    const weekData = data.filter((d) => {
+      if (!teamMemberIds.has(d.userId)) return false;
+      const date = new Date(d.date);
+      return date >= start && date <= end;
+    });
 
+    const totalDays = 7;
+    const expected = teamUsers.length * totalDays;
+    const submitted = weekData.length;
+    const submittedPct = expected > 0 ? (submitted / expected) * 100 : 0;
+
+    let plannedHours = 0;
+    let actualHours = 0;
+    let plannedCount = 0;
+    let actualCount = 0;
+    const blockerMap = {};
+    weekData.forEach((entry) => {
+      (entry.todayPlan || []).forEach((task) => {
+        if ((task.task || '').trim()) {
+          plannedHours += durationToHours(task.time);
+          plannedCount += 1;
+        }
+      });
+      (entry.todayActuals || []).forEach((task) => {
+        if ((task.task || '').trim()) {
+          actualHours += durationToHours(task.actualTime || task.time);
+          actualCount += 1;
+        }
+        if ((task.status || '').toLowerCase() === 'blocked' && (task.blockerReason || '').trim()) {
+          const blocker = task.blockerReason.trim();
+          blockerMap[blocker] = (blockerMap[blocker] || 0) + 1;
+        }
+      });
+    });
+
+    const topBlockers = Object.entries(blockerMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+
+    return {
+      submittedPct,
+      avgPlannedHours: plannedCount ? plannedHours / plannedCount : 0,
+      avgActualHours: actualCount ? actualHours / actualCount : 0,
+      topBlockers
+    };
+  }, [data, selectedDate, users]);
+
+  useEffect(() => {
+    if (!currentSM) return;
+    const now = new Date();
+    const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const todayKey = `${getTodayString()}-${hhmm}`;
+    const triggered = localStorage.getItem(`streetman_reminder_${todayKey}`);
+
+    if ((hhmm === '11:30' || hhmm === '18:30') && !triggered && missingUsers.length > 0) {
+      alert(`Reminder schedule (${hhmm}) triggered for ${missingUsers.length} pending update(s).`);
+      localStorage.setItem(`streetman_reminder_${todayKey}`, '1');
+      navigator.clipboard.writeText(generateReminderText()).catch(() => { });
+    }
+  }, [currentSM, missingUsers]);
+
+  const sendTeamsWebhook = async (type) => {
+    if (!teamsWebhookUrl.trim()) {
+      alert('Add Teams incoming webhook URL first.');
+      return;
+    }
+
+    const text = generateTeamsText(type);
+    try {
+      const response = await fetch(teamsWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      alert('Posted to Microsoft Teams successfully.');
+    } catch (error) {
+      alert(`Failed to post to Teams webhook: ${error.message}`);
+    }
+  };
   // --- PYTHON SCRIPT GENERATOR ---
   const downloadPythonScript = () => {
     // 1. Generate HTML Table String
@@ -804,7 +1011,7 @@ except Exception as e:
 
       let tasks = type === 'start' ? (userEntry.todayPlan || []) : (userEntry.todayActuals?.length > 0 ? userEntry.todayActuals : []);
       if (tasks.length === 0) content += "  - No tasks recorded\n";
-      else tasks.forEach((t, i) => content += `${i + 1}. ${t.task} - ${t.time || t.actualTime || ''}${type === 'end' ? ` - ${t.status || 'Done'}` : ''}\n`);
+      else tasks.forEach((t, i) => content += `${i + 1}. ${t.task} - ${t.project || 'General'} - ${t.time || t.actualTime || ''} - ${t.priority || 'Medium'}${t.blockerReason ? ` - Blocker: ${t.blockerReason}` : ''}${type === 'end' ? ` - ${t.status || 'Done'}` : ''}\n`);
       content += '\n';
     });
     return content;
@@ -853,6 +1060,43 @@ except Exception as e:
           </div>
         </div>
       </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs text-slate-500 font-semibold">Weekly submission rate</p>
+          <p className="text-2xl font-bold text-indigo-700 mt-1">{weeklyTrend.submittedPct.toFixed(1)}%</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs text-slate-500 font-semibold">Avg planned vs actual</p>
+          <p className="text-sm mt-2 text-slate-700">
+            Planned: <strong>{weeklyTrend.avgPlannedHours.toFixed(2)}h</strong> | Actual: <strong>{weeklyTrend.avgActualHours.toFixed(2)}h</strong>
+          </p>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-xs text-slate-500 font-semibold">Top blockers (weekly)</p>
+          <ul className="mt-2 text-sm text-slate-700 list-disc pl-5">
+            {weeklyTrend.topBlockers.length === 0 && <li>No blocker reasons captured</li>}
+            {weeklyTrend.topBlockers.map(([reason, count]) => (
+              <li key={reason}>{reason} ({count})</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <h4 className="font-semibold text-slate-700 mb-2">Role-based reminder schedules</h4>
+        <p className="text-xs text-slate-500 mb-3">
+          For Scrum Master/Admin sessions, reminders auto-trigger at 11:30 and 18:30 (local browser time) when pending updates exist.
+        </p>
+        <div className="grid md:grid-cols-3 gap-3">
+          <div className="bg-slate-50 border border-slate-200 rounded p-3 text-sm"><strong>11:30</strong> – Day-start reminder</div>
+          <div className="bg-slate-50 border border-slate-200 rounded p-3 text-sm"><strong>18:30</strong> – Day-end reminder</div>
+          <button
+            onClick={() => copyToClipboard(generateReminderText())}
+            className="bg-indigo-600 text-white rounded p-3 text-sm font-semibold hover:bg-indigo-700"
+          >
+            Copy current reminder
+          </button>
+        </div>
+      </div>
 
       <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
@@ -866,7 +1110,7 @@ except Exception as e:
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
-              {USERS.map((u) => {
+              {users.map((u) => {
                 const row = dailyData.find(d => d.userId === u.id);
                 const isLeave = row?.status === 'LEAVE';
 
@@ -879,14 +1123,26 @@ except Exception as e:
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {isLeave ? '-' : row ? (
                         <ul className="list-disc pl-4 space-y-1">
-                          {(row.yesterdayWork || []).map((t, i) => <li key={i}>{t.task} <span className="text-xs text-slate-400">({t.time})</span></li>)}
+                           {(row.yesterdayWork || []).map((t, i) => (
+                            <li key={i}>
+                              {t.task}
+                              <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
+                              {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
+                            </li>
+                          ))}
                         </ul>
                       ) : <span className="text-xs text-slate-300 italic">Not Submitted</span>}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {isLeave ? '-' : row && (
                         <ul className="list-disc pl-4 space-y-1">
-                          {(row.todayPlan || []).map((t, i) => <li key={i}>{t.task} <span className="text-xs text-slate-400">({t.time})</span></li>)}
+                          {(row.todayPlan || []).map((t, i) => (
+                            <li key={i}>
+                              {t.task}
+                              <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
+                              {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
+                            </li>
+                          ))}
                         </ul>
                       )}
                     </td>
@@ -958,8 +1214,14 @@ except Exception as e:
 
               {generatedContent === 'email' && (
                 <div className="space-y-6">
+                  <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded">
+                    <p className="text-sm font-semibold">Direct Outlook send from browser is limited.</p>
+                    <p className="text-xs mt-1">
+                      To send directly from this app, add a backend service with Microsoft Graph OAuth (client-side JS alone cannot securely send mail as your organization account).
+                    </p>
+                  </div>
                   {/* Python Script Section */}
-                  <div className="bg-white p-6 rounded shadow border-l-4 border-green-500">
+                  <div className="bg-white p-6 rounded shadow border--4 border-green-500">
                     <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
                       <Download size={18} className="text-green-600" /> Send via Python Script (Outlook)
                     </h4>
@@ -1011,6 +1273,21 @@ except Exception as e:
 
               {generatedContent?.includes('teams') && (
                 <div className="bg-white p-4 rounded shadow h-full flex flex-col">
+                  <div className="mb-3 grid md:grid-cols-4 gap-2">
+                    <input
+                      type="text"
+                      value={teamsWebhookUrl}
+                      onChange={(e) => setTeamsWebhookUrl(e.target.value)}
+                      placeholder="Microsoft Teams Incoming Webhook URL"
+                      className="md:col-span-3 border border-slate-300 rounded p-2 text-sm"
+                    />
+                    <button
+                      onClick={() => sendTeamsWebhook(generatedContent === 'teams-start' ? 'start' : 'end')}
+                      className="bg-blue-600 text-white rounded px-3 py-2 text-sm font-semibold hover:bg-blue-700"
+                    >
+                      Post to Teams
+                    </button>
+                  </div>
                   <textarea
                     readOnly
                     className="flex-1 w-full p-4 bg-slate-50 font-mono text-sm border rounded resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -1039,10 +1316,20 @@ function ReportsView({ data }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
 
   const filteredData = useMemo(() => {
-    return data.filter(d => d.date.startsWith(month));
+    return data.filter(d => d.date.startsWith(month)).filter((doc) => {
+      if (doc.status === 'LEAVE') return true;
+      const hasYesterday = (doc.yesterdayWork || []).some((task) => (task.task || '').trim());
+      const hasPlan = (doc.todayPlan || []).some((task) => (task.task || '').trim());
+      const hasActual = (doc.todayActuals || []).some((task) => (task.task || '').trim());
+      return hasYesterday || hasPlan || hasActual;
+    });
   }, [data, month]);
 
   const downloadExcel = async () => {
+    if (filteredData.length === 0) {
+      alert("No valid data found for selected month.");
+      return;
+    }
     if (!window.ExcelJS) {
       alert("Excel export library is loading. Please wait a moment and try again.");
       return;
@@ -1198,12 +1485,39 @@ function ReportsView({ data }) {
   );
 }
 
-function AdminView({ users, config, setConfig }) {
+function AdminView({ users, setUsers, config, setConfig }) {
+  const [newMember, setNewMember] = useState({ id: '', name: '', team: MEMBER_TEAMS[0], pin: '' });
   const handleAssign = (userId) => {
     if (window.confirm("Confirm: Assign this user as the new Weekly Scrum Master?")) {
       setConfig({ ...config, currentScrumMasterId: userId });
       alert("Scrum Master Updated Successfully!");
     }
+  };
+  const handleAddMember = () => {
+    const payload = {
+      id: newMember.id.trim(),
+      name: newMember.name.trim(),
+      team: newMember.team,
+      pin: newMember.pin.trim(),
+      role: 'MEMBER'
+    };
+
+    if (!payload.id || !payload.name || !payload.pin) {
+      alert('Please enter member id, name and PIN.');
+      return;
+    }
+    if (users.some((u) => u.id === payload.id)) {
+      alert('Member ID already exists. Use a unique ID.');
+      return;
+    }
+    if (users.some((u) => u.pin === payload.pin)) {
+      alert('PIN already used. Use a unique PIN for each member.');
+      return;
+    }
+
+    setUsers((prev) => [...prev, payload]);
+    setNewMember({ id: '', name: '', team: MEMBER_TEAMS[0], pin: '' });
+    alert('New member added successfully.');
   };
 
   return (
@@ -1216,6 +1530,43 @@ function AdminView({ users, config, setConfig }) {
       </div>
 
       <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-slate-200 p-6">
+        <h3 className="text-lg font-bold text-slate-800 mb-4">Add New Member</h3>
+        <div className="grid md:grid-cols-4 gap-3 mb-8">
+          <input
+            type="text"
+            placeholder="Member ID"
+            className="border border-slate-300 rounded p-2 text-sm"
+            value={newMember.id}
+            onChange={(e) => setNewMember((prev) => ({ ...prev, id: e.target.value }))}
+          />
+          <input
+            type="text"
+            placeholder="Member name"
+            className="border border-slate-300 rounded p-2 text-sm"
+            value={newMember.name}
+            onChange={(e) => setNewMember((prev) => ({ ...prev, name: e.target.value }))}
+          />
+          <select
+            className="border border-slate-300 rounded p-2 text-sm"
+            value={newMember.team}
+            onChange={(e) => setNewMember((prev) => ({ ...prev, team: e.target.value }))}
+          >
+            {MEMBER_TEAMS.map((teamName) => <option key={teamName} value={teamName}>{teamName}</option>)}
+          </select>
+          <input
+            type="password"
+            placeholder="Unique PIN"
+            className="border border-slate-300 rounded p-2 text-sm"
+            value={newMember.pin}
+            onChange={(e) => setNewMember((prev) => ({ ...prev, pin: e.target.value }))}
+          />
+        </div>
+        <button
+          onClick={handleAddMember}
+          className="mb-8 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-indigo-700"
+        >
+          Add Member
+        </button>
         <h3 className="text-lg font-bold text-slate-800 mb-4">Assign Weekly Scrum Master</h3>
         <div className="space-y-2">
           {users.filter(u => u.role !== 'ADMIN').map(user => (
