@@ -193,7 +193,7 @@ export default function App() {
   });
 
   const [statusData, setStatusData] = useState([]);
-  const [appConfig, setAppConfig] = useState({ currentScrumMasterId: '1350' });
+  const [appConfig, setAppConfig] = useState({ currentScrumMasterId: '1349' });
 
   const [authError, setAuthError] = useState(null);
   const [dbError, setDbError] = useState(null);
