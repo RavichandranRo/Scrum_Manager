@@ -103,18 +103,23 @@ const PROJECT_CATEGORIES = {
 
 // HARDCODED TEAM MEMBERS
 const DEFAULT_USERS = [
-  { id: '1349', name: 'Ravichandran C', team: 'StreetMan Core QA', role: 'ADMIN', pin: '1234' },
-  { id: '1350', name: 'Keerthana M', team: 'StreetMan Core QA', role: 'MEMBER', pin: '1350' },
-  { id: '1351', name: 'Manirathinam S', team: 'StreetMan Core QA', role: 'MEMBER', pin: '1351' },
-  { id: '1352', name: 'Karthika S', team: 'StreetMan Core QA', role: 'MEMBER', pin: '1352' },
-  { id: '1353', name: 'Vignesh S', team: 'StreetMan Core QA', role: 'MEMBER', pin: '1353' },
-  { id: '1354', name: 'Shanmugam S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1354' },
-  { id: '1355', name: 'Keerthana S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1355' },
-  { id: '1356', name: 'Gobi S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1356' },
-  { id: '1357', name: 'Surendar S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1357' },
-  { id: '1358', name: 'Nithishkumar M', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1358' },
-  { id: '1359', name: 'Thinakaran S', team: 'StreetMan Core Dev', role: 'MEMBER', pin: '1359' },
-  { id: '1360', name: 'Balamurugan B', team: 'Hardware', role: 'MEMBER', pin: '1360' }
+  { id: '1349', name: 'Ravichandran C', team: 'StreetMan QA', role: 'ADMIN', pin: '1349' },
+  { id: '1253', name: 'Keerthana M', team: 'StreetMan QA', role: 'MEMBER', pin: '1253' },
+  { id: '1266', name: 'Manirathinam S', team: 'StreetMan QA', role: 'MEMBER', pin: '1266' },
+  { id: '1252', name: 'Karthika S', team: 'StreetMan QA', role: 'MEMBER', pin: '1252' },
+  { id: '1342', name: 'Vignesh S', team: 'StreetMan QA', role: 'MEMBER', pin: '1342' },
+  { id: '1220', name: 'Shanmugam S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1220' },
+  { id: '1312', name: 'Keerthana S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1312' },
+  { id: '1316', name: 'Gobi S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1316' },
+  { id: '1335', name: 'Surendar S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1335' },
+  { id: '1345', name: 'Nithishkumar M', team: 'StreetMan Dev', role: 'MEMBER', pin: '1345' },
+  { id: '1341', name: 'Thinakaran S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1341' },
+  { id: '1363', name: 'Balamurugan B', team: 'Hardware', role: 'MEMBER', pin: '1363' },
+  { id: '1299', name: 'Kanishka V R', team: 'StreetMan NexGen Dev', role: 'MEMBER', pin: '1299' },
+  { id: '1247', name: 'Krithinarayanan G', team: 'StreetMan NexGen Dev', role: 'MEMBER', pin: '1247' },
+  { id: '1284', name: 'Sooryaprakash S', team: 'StreetMan NexGen Dev', role: 'MEMBER', pin: '1284' },
+  { id: '1181', name: 'Subburam A', team: 'StreetMan NexGen Dev', role: 'MEMBER', pin: '1181' },
+  { id: '1329', name: 'Umapathi C', team: 'StreetMan NexGen Dev', role: 'MEMBER', pin: '1329' },
 ];
 
 // --- HELPER FUNCTIONS ---
