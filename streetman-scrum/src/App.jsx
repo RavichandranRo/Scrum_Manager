@@ -138,7 +138,7 @@ const checkTimeWindows = () => {
   const hours = now.getHours();
   return {
     isDayStartOpen: hours < 19,
-    isDayEndOpen: hours >= 19 && hours < 20
+    isDayEndOpen: hours >= 18 && hours < 21
   };
 };
 
