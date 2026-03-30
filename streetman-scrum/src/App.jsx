@@ -694,7 +694,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
               <div className="flex items-center justify-between border-b border-slate-300 pb-2">
                 <h3 className="text-lg font-bold text-green-900 flex items-center gap-2">
                   2. Day End Actuals
-                  {!isDayEndOpen && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded flex items-center gap-1"><Lock size={10} /> Closed (Open 7pm-8pm)</span>}
+                  {!isDayEndOpen && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded flex items-center gap-1"><Lock size={10} /> Closed (Open 6pm-9pm)</span>}
                 </h3>
                 {isDayEndOpen && <button type="button" onClick={() => addTask('todayActuals')} className="text-sm text-green-600 hover:text-green-800 font-medium">+ Actual Item</button>}
               </div>
