@@ -132,6 +132,11 @@ const formatDate = (date) => {
 };
 
 const getTodayString = () => new Date().toISOString().split('T')[0];
+const getPreviousDateString = (dateStr) => {
+  const date = new Date(dateStr);
+  date.setDate(date.getDate() - 1);
+  return date.toISOString().split('T')[0];
+};
 
 const checkTimeWindows = () => {
   const now = new Date();
@@ -349,15 +354,13 @@ export default function App() {
                 <NavButton active={activeTab === 'input'} onClick={() => setActiveTab('input')} icon={<PlusCircle size={18} />}>
                   Daily Input
                 </NavButton>
+                <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Users size={18} />}>
+                  Scrum Board
+                </NavButton>
                 {(isScrumMaster || isAdmin) && (
-                  <>
-                    <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Users size={18} />}>
-                      Scrum Board
-                    </NavButton>
-                    <NavButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} icon={<FileSpreadsheet size={18} />}>
-                      Reports
-                    </NavButton>
-                  </>
+                  <NavButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} icon={<FileSpreadsheet size={18} />}>
+                    Reports
+                  </NavButton>
                 )}
                 {isAdmin && (
                   <NavButton active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} icon={<UserCog size={18} />}>
@@ -433,7 +436,7 @@ export default function App() {
             />
           )}
 
-          {!isScrumMaster && !isAdmin && activeTab !== 'input' && (
+          {!isScrumMaster && !isAdmin && activeTab !== 'input' && activeTab !== 'dashboard' && (
             <div className="flex flex-col items-center justify-center h-64 text-slate-400">
               <Lock size={48} className="mb-4 text-slate-300" />
               <p>Restricted Access. Only Scrum Master can view this.</p>
@@ -474,6 +477,8 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
   const { isDayStartOpen, isDayEndOpen } = checkTimeWindows();
 
   const existingEntry = existingData.find(d => d.date === today && d.userId === currentUserProfile.id);
+  const previousDate = getPreviousDateString(today);
+  const previousEntry = existingData.find(d => d.date === previousDate && d.userId === currentUserProfile.id);
   const isUpdateMode = !!existingEntry;
   const isOnLeave = existingEntry?.status === 'LEAVE';
 
@@ -494,14 +499,24 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
         todayActuals: existingEntry.todayActuals?.length > 0 ? existingEntry.todayActuals : (existingEntry.todayPlan || []).map(p => ({ ...p, status: 'Completed', actualTime: p.time, blockerReason: p.blockerReason || '' }))
       });
     } else {
+      const autoYesterdayFromActuals = (previousEntry?.todayActuals || [])
+        .filter((task) => (task.task || '').trim())
+        .map((task) => ({
+          task: task.task,
+          project: task.project || 'SMNGUI',
+          time: task.actualTime || task.time || '',
+          status: task.status || 'Completed',
+          priority: task.priority || 'Medium',
+          blockerReason: task.blockerReason || ''
+        }));
       setFormData({
-        yesterdayWork: [{ task: '', project: 'SMNGUI', time: '', status: 'Completed', priority: 'Medium', blockerReason: '' }],
+        yesterdayWork: autoYesterdayFromActuals.length > 0 ? autoYesterdayFromActuals : [{ task: '', project: 'SMNGUI', time: '', status: 'Completed', priority: 'Medium', blockerReason: '' }],
         todayPlan: [{ task: '', project: 'SMNGUI', time: '', priority: 'Medium', blockerReason: '' }],
         todayActuals: []
       });
     }
     setLoading(false);
-  }, [existingEntry, currentUserProfile.id]);
+  }, [existingEntry, previousEntry, currentUserProfile.id]);
 
   const handleTaskChange = (section, index, field, value) => {
     const newSection = [...formData[section]];
@@ -531,6 +546,17 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!isDayStartOpen && !isDayEndOpen) {
+      alert("Status window is closed. You can submit only during allowed day-start/day-end timings.");
+      return;
+    }
+    const blockedWithoutReason = formData.todayActuals.some(
+      (task) => (task.status || '').toLowerCase() === 'blocked' && !(task.blockerReason || '').trim()
+    );
+    if (blockedWithoutReason) {
+      alert("Please provide blocker reason for all blocked tasks before saving.");
+      return;
+    }
     if (!window.confirm("Are you sure you want to submit your status?")) return;
 
     setSubmitting(true);
@@ -699,8 +725,8 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
                 {isDayEndOpen && <button type="button" onClick={() => addTask('todayActuals')} className="text-sm text-green-600 hover:text-green-800 font-medium">+ Actual Item</button>}
               </div>
               {formData.todayActuals.map((item, idx) => (
-                <div key={idx} className="flex flex-col sm:flex-row gap-2 items-start bg-white p-2 rounded border border-green-100">
-                  <div className="flex-1 w-full">
+                <div key={idx} className="grid grid-cols-1 md:grid-cols-8 gap-2 items-start bg-white p-2 rounded border border-green-100">
+                  <div className="md:col-span-2 w-full">
                     <input disabled={!isDayEndOpen} type="text" value={item.task} onChange={(e) => handleTaskChange('todayActuals', idx, 'task', e.target.value)} className="w-full rounded border-slate-300 p-2 text-sm disabled:bg-slate-50" />
                   </div>
                   <input
@@ -760,7 +786,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 }
 
 // --- VIEW 2: Scrum Dashboard ---
-function DashboardView({ data, currentSM, users }) {
+function DashboardView({ data, currentSM, users, canManage }) {
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [generatedContent, setGeneratedContent] = useState(null);
   const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('https://default414ad49ffdc94181bd7eba81a9cdb7.7f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3af37b0ffc76482586cb2c84319d8242/triggers/manual/paths/invoke?api-version=1'); // Added this line to fix the crash
@@ -768,6 +794,7 @@ function DashboardView({ data, currentSM, users }) {
     address: 'admin@company.com',
     to: 'smscrum@dhyan.com'
   });
+
   const [teamsReminderConfig, setTeamsReminderConfig] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('streetman_teams_reminder_config') || '{"recipients":""}');
@@ -1076,11 +1103,14 @@ except Exception as e:
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-300 transition cursor-pointer group" onClick={() => setGeneratedContent('email')}>
-          <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-blue-600"><Mail size={18} className="text-blue-500" /> 12 PM Email</h3>
-          <p className="text-xs text-slate-500">Generate HTML table or Python script.</p>
-        </div>
+       <div className={`grid grid-cols-1 ${canManage ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-4`}>
+        {canManage && (
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-300 transition cursor-pointer group" onClick={() => setGeneratedContent('email')}>
+            <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-blue-600"><Mail size={18} className="text-blue-500" /> 12 PM Email</h3>
+            <p className="text-xs text-slate-500">Generate HTML table or Python script.</p>
+          </div>
+        )}
+       
         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-purple-300 transition cursor-pointer group" onClick={() => setGeneratedContent('teams-start')}>
           <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-purple-600"><MessageSquare size={18} className="text-purple-500" /> Day Start Post</h3>
           <p className="text-xs text-slate-500">Generate "Today's Plan" text for Teams.</p>
@@ -1089,14 +1119,18 @@ except Exception as e:
           <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-purple-600"><MessageSquare size={18} className="text-purple-600" /> Day End Post</h3>
           <p className="text-xs text-slate-500">Generate "Today's Actuals" text for Teams.</p>
         </div>
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-red-300 transition cursor-pointer group" onClick={() => setGeneratedContent('reminders')}>
-          <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-red-600"><Bell size={18} className="text-red-500" /> Reminders</h3>
-          <div className="flex items-end gap-2">
-            <span className="text-2xl font-bold text-slate-800">{missingUsers.length}</span>
-            <span className="text-slate-500 text-xs mb-1">pending</span>
+        {canManage && (
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-red-300 transition cursor-pointer group" onClick={() => setGeneratedContent('reminders')}>
+            <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-red-600"><Bell size={18} className="text-red-500" /> Reminders</h3>
+            <div className="flex items-end gap-2">
+              <span className="text-2xl font-bold text-slate-800">{missingUsers.length}</span>
+              <span className="text-slate-500 text-xs mb-1">pending</span>
+            </div>
           </div>
-        </div>
+           )}
       </div>
+
+      {canManage && (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-xs text-slate-500 font-semibold">Weekly submission rate</p>
@@ -1118,6 +1152,9 @@ except Exception as e:
           </ul>
         </div>
       </div>
+      )}
+      
+      {canManage && (
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <h4 className="font-semibold text-slate-700 mb-2">Role-based reminder schedules</h4>
         <p className="text-xs text-slate-500 mb-3">
@@ -1146,15 +1183,17 @@ except Exception as e:
           Auto-reminder opens an email draft when dashboard is open at 11:30 / 18:30 and recipients are configured.
         </p>
       </div>
+      )}
 
+      {canManage && (
       <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Member</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase w-1/4">Yesterday's Work</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase w-1/4">Today's Plan</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase w-1/3">Day Start Data</th>
+                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase w-1/3">Day End Data</th>
                 <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase">Action</th>
               </tr>
             </thead>
@@ -1171,32 +1210,50 @@ except Exception as e:
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {isLeave ? '-' : row ? (
-                        <ul className="list-disc pl-4 space-y-1">
-                          {(row.yesterdayWork || []).map((t, i) => (
-                            <li key={i}>
-                              {t.task}
-                              <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
-                              {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-[11px] uppercase font-bold text-slate-400">Yesterday</p>
+                            <ul className="list-disc pl-4 space-y-1">
+                              {(row.yesterdayWork || []).map((t, i) => (
+                                <li key={i}>
+                                  {t.task}
+                                  <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
+                                  {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="text-[11px] uppercase font-bold text-slate-400">Today's Plan</p>
+                            <ul className="list-disc pl-4 space-y-1">
+                              {(row.todayPlan || []).map((t, i) => (
+                                <li key={i}>
+                                  {t.task}
+                                  <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
+                                  {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
                       ) : <span className="text-xs text-slate-300 italic">Not Submitted</span>}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {isLeave ? '-' : row && (
+                      {isLeave ? '-' : row ? (
                         <ul className="list-disc pl-4 space-y-1">
-                          {(row.todayPlan || []).map((t, i) => (
+                          {(row.todayActuals || []).length === 0 && <li className="text-xs text-slate-400 list-none">No day-end actuals captured</li>}
+                          {(row.todayActuals || []).map((t, i) => (
                             <li key={i}>
                               {t.task}
-                              <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
+                              <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.actualTime || t.time || '-'} • {t.priority || 'Medium'} • {t.status || 'Completed'})</span>
                               {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
                             </li>
                           ))}
                         </ul>
-                      )}
+                      ): <span className="text-xs text-slate-300 italic">Not Submitted</span>}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      {row && !isLeave && (
+                      {canManage && row && !isLeave && (
                         <button
                           onClick={() => toggleApproval(row.id, row.approved)}
                           className={`p-2 rounded-full transition-colors ${row.approved ? 'bg-green-100 text-green-600 hover:bg-green-200' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
@@ -1204,7 +1261,7 @@ except Exception as e:
                           <ShieldCheck size={20} />
                         </button>
                       )}
-                      {!row && (
+                      {canManage && !row && (
                         <button
                           onClick={() => markAsLeave(u)}
                           className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded hover:bg-amber-200"
@@ -1212,6 +1269,7 @@ except Exception as e:
                           Mark Leave
                         </button>
                       )}
+                      {!canManage && <span className="text-xs text-slate-300">-</span>}
                     </td>
                   </tr>
                 );
@@ -1220,7 +1278,7 @@ except Exception as e:
           </table>
         </div>
       </div>
-
+)}
       {generatedContent && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
@@ -1385,6 +1443,8 @@ function ReportsView({ data }) {
     sheet.columns = [
       { header: 'Date', key: 'date', width: 15 },
       { header: 'Employee Name', key: 'name', width: 25 },
+      { header: "Yesterday's Work", key: 'yesterday_summary', width: 45 },
+      { header: "Today's Plan", key: 'plan_summary', width: 45 },
       { header: 'Hardware Tasks', key: 'hw_task', width: 40 },
       { header: 'Duration', key: 'hw_time', width: 10 },
       { header: 'SMNGUI Tasks', key: 'gui_task', width: 40 },
@@ -1397,7 +1457,7 @@ function ReportsView({ data }) {
     const headerRow = sheet.getRow(1);
 
     // Apply style to specific cells 1-8
-    for (let i = 1; i <= 8; i++) {
+    for (let i = 1; i <= 10; i++) {
       const cell = headerRow.getCell(i);
       cell.value = sheet.columns[i - 1].header;
       cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -1431,6 +1491,8 @@ function ReportsView({ data }) {
       const rowValues = {
         date: doc.date,
         name: doc.userName,
+        yesterday_summary: (doc.yesterdayWork || []).map((task) => `• ${task.task} (${task.time || '-'})`).join('\n'),
+        plan_summary: (doc.todayPlan || []).map((task) => `• ${task.task} (${task.time || '-'})`).join('\n'),
         hw_task: buckets['Hardware'].tasks.map(t => `• ${t}`).join('\n'),
         hw_time: formatMinutesToDuration(buckets['Hardware'].minutes),
         gui_task: buckets['SMNGUI'].tasks.map(t => `• ${t}`).join('\n'),
@@ -1443,8 +1505,8 @@ function ReportsView({ data }) {
 
       // Handle Styling
       if (doc.status === 'LEAVE') {
-        // Merge cells 3 to 8 (Hardware Task to Core Duration)
-        sheet.mergeCells(row.number, 3, row.number, 8);
+        // Merge cells 3 to 10 for leave rows
+        sheet.mergeCells(row.number, 3, row.number, 10);
         const cell = sheet.getCell(row.number, 3);
         cell.value = "ON LEAVE";
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1452,7 +1514,7 @@ function ReportsView({ data }) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
         cell.font = { color: { argb: 'FF000000' }, bold: true };
         // Borders
-        for (let i = 1; i <= 8; i++) {
+        for (let i = 1; i <= 10; i++) {
           const c = row.getCell(i);
           c.border = {
             top: { style: 'thin' },
@@ -1465,12 +1527,12 @@ function ReportsView({ data }) {
         }
       } else {
         // Regular wrapping for task columns
-        [3, 5, 7].forEach(colIdx => {
+        [3, 4, 5, 7, 9].forEach(colIdx => {
           const cell = sheet.getCell(row.number, colIdx);
           cell.alignment = { wrapText: true, vertical: 'top' };
         });
         // Center align time columns
-        [4, 6, 8].forEach(colIdx => {
+        [6, 8, 10].forEach(colIdx => {
           sheet.getCell(row.number, colIdx).alignment = { horizontal: 'center', vertical: 'top' };
         });
 
