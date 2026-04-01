@@ -1,91 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { initializeApp, getApps, getApp } from 'firebase/app';
+// SQLite migration note:
+// Firebase imports intentionally commented per request (do not remove).
+// import { initializeApp, getApps, getApp } from 'firebase/app';
+// import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+// import { getFirestore, collection, addDoc, query, where, getDocs, Timestamp, onSnapshot, doc, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import {
-  getAuth,
-  signInAnonymously,
-  onAuthStateChanged
-} from 'firebase/auth';
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  query,
-  where,
-  getDocs,
-  Timestamp,
-  onSnapshot,
-  doc,
-  updateDoc,
-  setDoc,
-  deleteDoc
-} from 'firebase/firestore';
-import {
-  LayoutDashboard,
-  PlusCircle,
-  Users,
-  FileSpreadsheet,
-  Copy,
-  Mail,
-  MessageSquare,
-  LogOut,
-  ChevronDown,
-  CheckCircle2,
-  AlertTriangle,
-  Lock,
-  ShieldCheck,
-  UserCog,
-  Clock,
-  CalendarCheck,
-  WifiOff,
-  CloudLightning,
-  Database,
-  RefreshCw,
-  Send,
-  User,
-  ExternalLink,
-  Download,
-  Bell,
-  Coffee
+  LayoutDashboard, PlusCircle, Users, FileSpreadsheet, Copy, Mail, MessageSquare,
+  LogOut, ChevronDown, CheckCircle2, AlertTriangle, Lock, ShieldCheck, UserCog,
+  Clock, CalendarCheck, WifiOff, CloudLightning, Database, RefreshCw, Send,
+  User, ExternalLink, Download, Bell, Coffee
 } from 'lucide-react';
 
-// --- FIREBASE CONFIGURATION ---
-const firebaseConfig = {
-  apiKey: "AIzaSyDd0btvIIhvSNkMkPVP2JWj0e03qFUVRqs",
-  authDomain: "streetman-scrum-automation.firebaseapp.com",
-  projectId: "streetman-scrum-automation",
-  storageBucket: "streetman-scrum-automation.firebasestorage.app",
-  messagingSenderId: "1044344783744",
-  appId: "1:1044344783744:web:d23da3ff9bf1a897447765",
-  measurementId: "G-Q3NWV1D7QW"
-};
-
-// --- SAFE INITIALIZATION & HMR HANDLING ---
-let app;
-let auth;
-let db;
 let configError = null;
 
-try {
-  if (getApps().length > 0) {
-    app = getApp();
-    if (app.options.apiKey !== firebaseConfig.apiKey) {
-      console.warn("Firebase Config Changed - App needs reload");
-      configError = "hmr_reload_needed";
-    }
-  } else {
-    app = initializeApp(firebaseConfig);
-  }
-
-  if (!configError) {
-    auth = getAuth(app);
-    db = getFirestore(app);
-  }
-} catch (e) {
-  console.error("Firebase Init Error:", e);
-  configError = e.message;
-}
-
 const appId = "streetman-scrum-automation";
+
+// --- NEW SERVER CONFIGURATION ---
+const BACKEND_URL = 'http://192.168.26.210:3001';
 
 // --- TEAM CONFIGURATION ---
 const PROJECTS = ['SMNGUI', 'Ohli Hardware', 'Bosun Module', 'General'];
@@ -95,10 +26,11 @@ const CUSTOM_USERS_STORAGE_KEY = 'streetman_custom_users';
 
 // PROJECT MAPPING FOR EXPORT
 const PROJECT_CATEGORIES = {
-  'Ohli Hardware': 'Hardware',
+  'Hardware': 'Hardware',
   'SMNGUI': 'SMNGUI',
-  'Bosun Module': 'SM Core',
-  'General': 'SM Core'
+  'Core': 'Core',
+  'SNC': 'SNC',
+  'AWS': 'AWS'
 };
 
 // HARDCODED TEAM MEMBERS
@@ -125,9 +57,7 @@ const DEFAULT_USERS = [
 // --- HELPER FUNCTIONS ---
 const formatDate = (date) => {
   return new Date(date).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
+    day: '2-digit', month: 'short', year: 'numeric'
   }).replace(/ /g, '-');
 };
 
@@ -150,22 +80,16 @@ const checkTimeWindows = () => {
 const parseDurationToMinutes = (timeStr) => {
   if (!timeStr) return 0;
   const value = String(timeStr).trim().toLowerCase();
-
-  if (/^\d+(\.\d+)?$/.test(value)) {
-    return Math.round(parseFloat(value) * 60);
-  }
+  if (/^\d+(\.\d+)?$/.test(value)) return Math.round(parseFloat(value) * 60);
 
   const hoursMatch = value.match(/(\d+(\.\d+)?)\s*h/);
   const minsMatch = value.match(/(\d+(\.\d+)?)\s*m/);
   let totalMinutes = 0;
   if (hoursMatch) totalMinutes += parseFloat(hoursMatch[1]) * 60;
   if (minsMatch) totalMinutes += parseFloat(minsMatch[1]);
-
   return Math.round(totalMinutes);
 };
-const durationToHours = (timeStr) => {
-  return parseDurationToMinutes(timeStr) / 60;
-};
+const durationToHours = (timeStr) => parseDurationToMinutes(timeStr) / 60;
 const formatMinutesToDuration = (minutes) => {
   if (minutes === 0) return "";
   const h = Math.floor(minutes / 60);
@@ -174,8 +98,15 @@ const formatMinutesToDuration = (minutes) => {
   if (h > 0) return `${h}h`;
   return `${m}m`;
 };
+const generateSafeId = () => {
+  // If in a secure context, use the standard method
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for standard HTTP network IP addresses
+  return Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 10);
+};
 
-// --- MAIN APP COMPONENT ---
 // --- MAIN APP COMPONENT ---
 export default function App() {
   const [user, setUser] = useState(null);
@@ -202,6 +133,7 @@ export default function App() {
 
   const [authError, setAuthError] = useState(null);
   const [dbError, setDbError] = useState(null);
+
   useEffect(() => {
     const customUsers = users.filter((u) => !DEFAULT_USERS.some((d) => d.id === u.id));
     localStorage.setItem(CUSTOM_USERS_STORAGE_KEY, JSON.stringify(customUsers));
@@ -233,37 +165,32 @@ export default function App() {
 
   // --- AUTH LOADING ---
   useEffect(() => {
-    if (configError || !auth) return;
-    const initAuth = async () => {
-      try {
-        await signInAnonymously(auth);
-      } catch (err) {
-        console.error("Auth Error:", err);
-        setAuthError(err.message);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (!u) setCurrentUserProfile(null);
-    });
-    return () => unsubscribe();
+    if (configError) return;
+    setUser({ id: 'sqlite-local-user' });
   }, []);
 
-  // --- DATA LOADING ---
+  // --- DATA LOADING FROM SERVER ---
   useEffect(() => {
-    if (!user || !db) return;
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'daily_status'));
-    const unsubscribeData = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setStatusData(data);
-      setDbError(null);
-    }, (error) => {
-      console.error("Firestore Error:", error);
-      if (error.code === 'permission-denied') setDbError("Check Firestore Rules.");
-      else setDbError(error.message);
-    });
-    return () => unsubscribeData();
+    if (!user) return;
+
+    const fetchStatuses = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/daily-status`);
+        if (!res.ok) throw new Error("Failed to fetch data");
+        const data = await res.json();
+        setStatusData(data);
+        setDbError(null);
+      } catch (err) {
+        console.error("Fetch error:", err);
+        setDbError("Could not connect to database server at " + BACKEND_URL);
+      }
+    };
+
+    fetchStatuses();
+
+    // Automatically poll for updates every 10 seconds
+    const interval = setInterval(fetchStatuses, 10000);
+    return () => clearInterval(interval);
   }, [user]);
 
   // --- HANDLERS ---
@@ -285,7 +212,6 @@ export default function App() {
   // --- RENDER ---
   if (configError) return <ErrorScreen title="Config Error" message={configError} />;
   if (authError) return <ErrorScreen title="Auth Failed" message={authError} />;
-  if (dbError) return <ErrorScreen title="Database Error" message={dbError} />;
 
   if (!user) {
     return (
@@ -297,7 +223,6 @@ export default function App() {
   }
 
   // --- LOGIN SCREEN ---
-  // FIX: Changed to w-screen h-screen to force full viewport usage
   if (!currentUserProfile || activeTab === 'login') {
     return (
       <div className="w-screen h-screen bg-slate-100 flex items-center justify-center p-4 overflow-hidden">
@@ -336,7 +261,6 @@ export default function App() {
     );
   }
 
-  // FIX: Added 'w-screen' to outer div and 'flex flex-col items-center' to main
   return (
     <div className="w-screen min-h-screen bg-slate-50 font-sans text-slate-900 overflow-x-hidden">
       <nav className="bg-indigo-900 text-white shadow-lg sticky top-0 z-50 w-full flex justify-center">
@@ -354,17 +278,14 @@ export default function App() {
                 <NavButton active={activeTab === 'input'} onClick={() => setActiveTab('input')} icon={<PlusCircle size={18} />}>
                   Daily Input
                 </NavButton>
-                <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Users size={18} />}>
-                  Scrum Board
-                </NavButton>
+                {(isScrumMaster || isAdmin) && (
+                  <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Users size={18} />}>
+                    Scrum Board
+                  </NavButton>
+                )}
                 {(isScrumMaster || isAdmin) && (
                   <NavButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} icon={<FileSpreadsheet size={18} />}>
                     Reports
-                  </NavButton>
-                )}
-                {isAdmin && (
-                  <NavButton active={activeTab === 'admin'} onClick={() => setActiveTab('admin')} icon={<UserCog size={18} />}>
-                    Admin
                   </NavButton>
                 )}
               </div>
@@ -414,7 +335,12 @@ export default function App() {
         </div>
       </nav>
 
-      {/* FIX: 'flex flex-col items-center' forces children to center */}
+      {dbError && (
+        <div className="w-full bg-red-500 text-white text-center py-2 text-sm flex items-center justify-center gap-2 font-bold shadow-md relative z-40">
+          <WifiOff size={16} /> {dbError}
+        </div>
+      )}
+
       <main className="w-full flex flex-col items-center py-8 px-4 sm:px-6 lg:px-8">
         <div className="w-full max-w-7xl">
           {activeTab === 'input' && (
@@ -423,9 +349,10 @@ export default function App() {
               existingData={statusData}
               customProjects={customProjects}
               setCustomProjects={setCustomProjects}
+              setStatusData={setStatusData}
             />
           )}
-          {activeTab === 'dashboard' && isScrumMaster && <DashboardView data={statusData} currentSM={currentUserProfile} users={users} />}
+          {activeTab === 'dashboard' && (isScrumMaster || isAdmin) && <DashboardView data={statusData} currentSM={currentUserProfile} users={users} canManage={isScrumMaster || isAdmin} setStatusData={setStatusData} />}
           {activeTab === 'reports' && isScrumMaster && <ReportsView data={statusData} />}
           {activeTab === 'admin' && isAdmin && (
             <AdminView
@@ -439,7 +366,7 @@ export default function App() {
           {!isScrumMaster && !isAdmin && activeTab !== 'input' && activeTab !== 'dashboard' && (
             <div className="flex flex-col items-center justify-center h-64 text-slate-400">
               <Lock size={48} className="mb-4 text-slate-300" />
-              <p>Restricted Access. Only Scrum Master can view this.</p>
+              <p>Restricted Access. Only Scrum Master/Admin can view this.</p>
             </div>
           )}
         </div>
@@ -471,7 +398,7 @@ const NavButton = ({ active, onClick, children, icon }) => (
   </button>
 );
 
-function InputView({ currentUserProfile, existingData, customProjects, setCustomProjects }) {
+function InputView({ currentUserProfile, existingData, customProjects, setCustomProjects, setStatusData }) {
   const today = getTodayString();
   const [loading, setLoading] = useState(true);
   const { isDayStartOpen, isDayEndOpen } = checkTimeWindows();
@@ -523,6 +450,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
     newSection[index][field] = value;
     setFormData({ ...formData, [section]: newSection });
   };
+
   const addCustomProject = (value) => {
     const normalized = value.trim();
     if (!normalized) return;
@@ -564,6 +492,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 
     try {
       const payload = {
+        id: isUpdateMode ? existingEntry.id : generateSafeId(),
         userId: currentUserProfile.id,
         userName: currentUserProfile.name,
         team: currentUserProfile.team,
@@ -572,16 +501,25 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
         todayPlan: formData.todayPlan,
         todayActuals: isUpdateMode ? formData.todayActuals : [],
         approved: false,
-        updatedAt: Timestamp.now()
+        updatedAt: new Date().toISOString()
       };
 
-      if (!isUpdateMode) payload.createdAt = Timestamp.now();
+      if (!isUpdateMode) payload.createdAt = new Date().toISOString()
 
+      // Send to backend
+      const res = await fetch(`${BACKEND_URL}/api/daily-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) throw new Error("Server rejected the save");
+
+      // Instantly update UI state
       if (isUpdateMode) {
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_status', existingEntry.id);
-        await updateDoc(docRef, payload);
+        setStatusData(prev => prev.map(record => record.id === payload.id ? { ...record, ...payload } : record));
       } else {
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_status'), payload);
+        setStatusData(prev => [payload, ...prev]);
       }
 
       setMessage({ type: 'success', text: 'Status Saved Successfully!' });
@@ -786,10 +724,11 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 }
 
 // --- VIEW 2: Scrum Dashboard ---
-function DashboardView({ data, currentSM, users, canManage }) {
+function DashboardView({ data, currentSM, users, canManage, setStatusData }) {
+  const isManagerView = canManage || currentSM?.role === 'ADMIN';
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [generatedContent, setGeneratedContent] = useState(null);
-  const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('https://default414ad49ffdc94181bd7eba81a9cdb7.7f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3af37b0ffc76482586cb2c84319d8242/triggers/manual/paths/invoke?api-version=1'); // Added this line to fix the crash
+  const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('https://default414ad49ffdc94181bd7eba81a9cdb7.7f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3af37b0ffc76482586cb2c84319d8242/triggers/manual/paths/invoke?api-version=1');
   const [emailConfig, setEmailConfig] = useState({
     address: 'admin@company.com',
     to: 'smscrum@dhyan.com'
@@ -805,11 +744,9 @@ function DashboardView({ data, currentSM, users, canManage }) {
 
   const dailyData = useMemo(() => data.filter(d => d.date === selectedDate), [data, selectedDate]);
 
-  // Calculate missing users (Exclude users marked as LEAVE)
   const missingUsers = useMemo(() => {
     const submittedIds = dailyData.map(d => d.userId);
     return users.filter(u => {
-      // Check if already submitted OR marked as Leave
       const submission = dailyData.find(d => d.userId === u.id);
       const isLeave = submission?.status === 'LEAVE';
       return !submittedIds.includes(u.id) && !isLeave && u.role !== 'ADMIN';
@@ -818,14 +755,30 @@ function DashboardView({ data, currentSM, users, canManage }) {
 
   const toggleApproval = async (docId, currentStatus) => {
     if (!window.confirm(`Are you sure you want to ${currentStatus ? 'Unapprove' : 'Approve'} this status?`)) return;
-    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'daily_status', docId);
-    await updateDoc(docRef, { approved: !currentStatus });
+
+    const recordToUpdate = data.find(r => r.id === docId);
+    if (!recordToUpdate) return;
+    const updatedRecord = { ...recordToUpdate, approved: !currentStatus, updatedAt: new Date().toISOString() };
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/daily-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedRecord)
+      });
+      if (!res.ok) throw new Error("Server error");
+
+      setStatusData(prev => prev.map(record => record.id === docId ? updatedRecord : record));
+    } catch (err) {
+      alert("Failed to update approval status.");
+    }
   };
 
   const markAsLeave = async (user) => {
     if (!window.confirm(`Mark ${user.name} as ON LEAVE for ${formatDate(selectedDate)}?`)) return;
 
     const payload = {
+      id: generateSafeId(),
       userId: user.id,
       userName: user.name,
       team: user.team,
@@ -835,11 +788,22 @@ function DashboardView({ data, currentSM, users, canManage }) {
       todayPlan: [],
       todayActuals: [],
       approved: true,
-      updatedAt: Timestamp.now(),
-      createdAt: Timestamp.now()
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
     };
 
-    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'daily_status'), payload);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/daily-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error("Server error");
+
+      setStatusData(prev => [payload, ...prev]);
+    } catch (err) {
+      alert("Failed to mark as leave.");
+    }
   };
 
   const copyToClipboard = (text) => {
@@ -866,9 +830,11 @@ function DashboardView({ data, currentSM, users, canManage }) {
     const recipientText = recipients.length > 0 ? `Recipients: ${recipients.join(', ')}` : '';
     return `Hello team, awaiting updates from: ${missingUsers.map(u => u.name).join(', ')}. Please submit ASAP.${recipientText ? `\n${recipientText}` : ''}`;
   };
+
   useEffect(() => {
     localStorage.setItem('streetman_teams_reminder_config', JSON.stringify(teamsReminderConfig));
   }, [teamsReminderConfig]);
+
   const weeklyTrend = useMemo(() => {
     const end = new Date(selectedDate);
     const start = new Date(end);
@@ -940,7 +906,7 @@ function DashboardView({ data, currentSM, users, canManage }) {
 
       if (recipients.length > 0) {
         const subject = encodeURIComponent(`Scrum Reminder - ${formatDate(selectedDate)}`);
-        const body = encodeURIComponent(`⏰ Scrum Reminder (${hhmm})\n\n${reminderText}`);
+        const body = encodeURIComponent(`⏰ Scrum Reminder (${hhmm})\n\n${generateReminderText()}`);
         const mailtoUrl = `mailto:${encodeURIComponent(recipients.join(','))}?subject=${subject}&body=${body}`;
         window.open(mailtoUrl, '_blank');
         alert(`Reminder email draft opened for ${recipients.length} recipient(s).`);
@@ -970,9 +936,8 @@ function DashboardView({ data, currentSM, users, canManage }) {
       alert(`Failed to post to Teams webhook: ${error.message}`);
     }
   };
-  // --- PYTHON SCRIPT GENERATOR ---
+
   const downloadPythonScript = () => {
-    // 1. Generate HTML Table String
     let htmlTable = `<table border="1" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
         <thead style="background-color: #1e3a8a; color: white;">
             <tr>
@@ -1003,7 +968,6 @@ function DashboardView({ data, currentSM, users, canManage }) {
     });
     htmlTable += `</tbody></table>`;
 
-    // 2. Python Script Template
     const scriptContent = `import sys
 import subprocess
 
@@ -1103,14 +1067,13 @@ except Exception as e:
         </div>
       </div>
 
-       <div className={`grid grid-cols-1 ${canManage ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-4`}>
-        {canManage && (
+      <div className={`grid grid-cols-1 ${isManagerView ? 'md:grid-cols-4' : 'md:grid-cols-2'} gap-4`}>
+        {isManagerView && (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-300 transition cursor-pointer group" onClick={() => setGeneratedContent('email')}>
             <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-blue-600"><Mail size={18} className="text-blue-500" /> 12 PM Email</h3>
             <p className="text-xs text-slate-500">Generate HTML table or Python script.</p>
           </div>
         )}
-       
         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-purple-300 transition cursor-pointer group" onClick={() => setGeneratedContent('teams-start')}>
           <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-purple-600"><MessageSquare size={18} className="text-purple-500" /> Day Start Post</h3>
           <p className="text-xs text-slate-500">Generate "Today's Plan" text for Teams.</p>
@@ -1119,7 +1082,7 @@ except Exception as e:
           <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-purple-600"><MessageSquare size={18} className="text-purple-600" /> Day End Post</h3>
           <p className="text-xs text-slate-500">Generate "Today's Actuals" text for Teams.</p>
         </div>
-        {canManage && (
+        {isManagerView && (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-red-300 transition cursor-pointer group" onClick={() => setGeneratedContent('reminders')}>
             <h3 className="font-semibold text-slate-700 flex items-center gap-2 mb-2 group-hover:text-red-600"><Bell size={18} className="text-red-500" /> Reminders</h3>
             <div className="flex items-end gap-2">
@@ -1127,158 +1090,158 @@ except Exception as e:
               <span className="text-slate-500 text-xs mb-1">pending</span>
             </div>
           </div>
-           )}
+        )}
       </div>
 
-      {canManage && (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs text-slate-500 font-semibold">Weekly submission rate</p>
-          <p className="text-2xl font-bold text-indigo-700 mt-1">{weeklyTrend.submittedPct.toFixed(1)}%</p>
+      {isManagerView && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs text-slate-500 font-semibold">Weekly submission rate</p>
+            <p className="text-2xl font-bold text-indigo-700 mt-1">{weeklyTrend.submittedPct.toFixed(1)}%</p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs text-slate-500 font-semibold">Avg planned vs actual</p>
+            <p className="text-sm mt-2 text-slate-700">
+              Planned: <strong>{weeklyTrend.avgPlannedHours.toFixed(2)}h</strong> | Actual: <strong>{weeklyTrend.avgActualHours.toFixed(2)}h</strong>
+            </p>
+          </div>
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs text-slate-500 font-semibold">Top blockers (weekly)</p>
+            <ul className="mt-2 text-sm text-slate-700 list-disc pl-5">
+              {weeklyTrend.topBlockers.length === 0 && <li>No blocker reasons captured</li>}
+              {weeklyTrend.topBlockers.map(([reason, count]) => (
+                <li key={reason}>{reason} ({count})</li>
+              ))}
+            </ul>
+          </div>
         </div>
+      )}
+
+      {isManagerView && (
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs text-slate-500 font-semibold">Avg planned vs actual</p>
-          <p className="text-sm mt-2 text-slate-700">
-            Planned: <strong>{weeklyTrend.avgPlannedHours.toFixed(2)}h</strong> | Actual: <strong>{weeklyTrend.avgActualHours.toFixed(2)}h</strong>
+          <h4 className="font-semibold text-slate-700 mb-2">Role-based reminder schedules</h4>
+          <p className="text-xs text-slate-500 mb-3">
+            For Scrum Master/Admin sessions, reminders auto-trigger at 11:30 and 18:30 (local browser time) when pending updates exist.
+          </p>
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="bg-slate-50 border border-slate-200 rounded p-3 text-sm"><strong>11:30</strong> – Day-start reminder</div>
+            <div className="bg-slate-50 border border-slate-200 rounded p-3 text-sm"><strong>18:30</strong> – Day-end reminder</div>
+            <button
+              onClick={() => copyToClipboard(generateReminderText())}
+              className="bg-indigo-600 text-white rounded p-3 text-sm font-semibold hover:bg-indigo-700"
+            >
+              Copy current reminder
+            </button>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3 mt-4">
+            <input
+              type="text"
+              value={teamsReminderConfig.recipients}
+              onChange={(e) => setTeamsReminderConfig((prev) => ({ ...prev, recipients: e.target.value }))}
+              placeholder="Recipient mail IDs (comma-separated)"
+              className="border border-slate-300 rounded p-2 text-sm md:col-span-2"
+            />
+          </div>
+          <p className="text-[11px] text-slate-500 mt-2">
+            Auto-reminder opens an email draft when dashboard is open at 11:30 / 18:30 and recipients are configured.
           </p>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-xs text-slate-500 font-semibold">Top blockers (weekly)</p>
-          <ul className="mt-2 text-sm text-slate-700 list-disc pl-5">
-            {weeklyTrend.topBlockers.length === 0 && <li>No blocker reasons captured</li>}
-            {weeklyTrend.topBlockers.map(([reason, count]) => (
-              <li key={reason}>{reason} ({count})</li>
-            ))}
-          </ul>
-        </div>
-      </div>
-      )}
-      
-      {canManage && (
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <h4 className="font-semibold text-slate-700 mb-2">Role-based reminder schedules</h4>
-        <p className="text-xs text-slate-500 mb-3">
-          For Scrum Master/Admin sessions, reminders auto-trigger at 11:30 and 18:30 (local browser time) when pending updates exist.
-        </p>
-        <div className="grid md:grid-cols-3 gap-3">
-          <div className="bg-slate-50 border border-slate-200 rounded p-3 text-sm"><strong>11:30</strong> – Day-start reminder</div>
-          <div className="bg-slate-50 border border-slate-200 rounded p-3 text-sm"><strong>18:30</strong> – Day-end reminder</div>
-          <button
-            onClick={() => copyToClipboard(generateReminderText())}
-            className="bg-indigo-600 text-white rounded p-3 text-sm font-semibold hover:bg-indigo-700"
-          >
-            Copy current reminder
-          </button>
-        </div>
-        <div className="grid md:grid-cols-2 gap-3 mt-4">
-          <input
-            type="text"
-            value={teamsReminderConfig.recipients}
-            onChange={(e) => setTeamsReminderConfig((prev) => ({ ...prev, recipients: e.target.value }))}
-            placeholder="Recipient mail IDs (comma-separated)"
-            className="border border-slate-300 rounded p-2 text-sm md:col-span-2"
-          />
-        </div>
-        <p className="text-[11px] text-slate-500 mt-2">
-          Auto-reminder opens an email draft when dashboard is open at 11:30 / 18:30 and recipients are configured.
-        </p>
-      </div>
       )}
 
-      {canManage && (
-      <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Member</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase w-1/3">Day Start Data</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase w-1/3">Day End Data</th>
-                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase">Action</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
-              {users.map((u) => {
-                const row = dailyData.find(d => d.userId === u.id);
-                const isLeave = row?.status === 'LEAVE';
+      {isManagerView && (
+        <div className="bg-white rounded-xl shadow border border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Member</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase w-1/3">Day Start Data</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase w-1/3">Day End Data</th>
+                  <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-200">
+                {users.map((u) => {
+                  const row = dailyData.find(d => d.userId === u.id);
+                  const isLeave = row?.status === 'LEAVE';
 
-                return (
-                  <tr key={u.id} className={row?.approved ? 'bg-green-50/30' : (isLeave ? 'bg-amber-50/50' : (!row ? 'bg-slate-50/50' : ''))}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className={`text-sm font-bold ${row ? 'text-slate-900' : 'text-slate-400'}`}>{u.name}</div>
-                      {isLeave && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold mt-1 inline-block">ON LEAVE</span>}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {isLeave ? '-' : row ? (
-                        <div className="space-y-2">
-                          <div>
-                            <p className="text-[11px] uppercase font-bold text-slate-400">Yesterday</p>
-                            <ul className="list-disc pl-4 space-y-1">
-                              {(row.yesterdayWork || []).map((t, i) => (
-                                <li key={i}>
-                                  {t.task}
-                                  <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
-                                  {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
-                                </li>
-                              ))}
-                            </ul>
+                  return (
+                    <tr key={u.id} className={row?.approved ? 'bg-green-50/30' : (isLeave ? 'bg-amber-50/50' : (!row ? 'bg-slate-50/50' : ''))}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className={`text-sm font-bold ${row ? 'text-slate-900' : 'text-slate-400'}`}>{u.name}</div>
+                        {isLeave && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold mt-1 inline-block">ON LEAVE</span>}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {isLeave ? '-' : row ? (
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-[11px] uppercase font-bold text-slate-400">Yesterday</p>
+                              <ul className="list-disc pl-4 space-y-1">
+                                {(row.yesterdayWork || []).map((t, i) => (
+                                  <li key={i}>
+                                    {t.task}
+                                    <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
+                                    {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase font-bold text-slate-400">Today's Plan</p>
+                              <ul className="list-disc pl-4 space-y-1">
+                                {(row.todayPlan || []).map((t, i) => (
+                                  <li key={i}>
+                                    {t.task}
+                                    <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
+                                    {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-[11px] uppercase font-bold text-slate-400">Today's Plan</p>
-                            <ul className="list-disc pl-4 space-y-1">
-                              {(row.todayPlan || []).map((t, i) => (
-                                <li key={i}>
-                                  {t.task}
-                                  <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
-                                  {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      ) : <span className="text-xs text-slate-300 italic">Not Submitted</span>}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {isLeave ? '-' : row ? (
-                        <ul className="list-disc pl-4 space-y-1">
-                          {(row.todayActuals || []).length === 0 && <li className="text-xs text-slate-400 list-none">No day-end actuals captured</li>}
-                          {(row.todayActuals || []).map((t, i) => (
-                            <li key={i}>
-                              {t.task}
-                              <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.actualTime || t.time || '-'} • {t.priority || 'Medium'} • {t.status || 'Completed'})</span>
-                              {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ): <span className="text-xs text-slate-300 italic">Not Submitted</span>}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      {canManage && row && !isLeave && (
-                        <button
-                          onClick={() => toggleApproval(row.id, row.approved)}
-                          className={`p-2 rounded-full transition-colors ${row.approved ? 'bg-green-100 text-green-600 hover:bg-green-200' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
-                        >
-                          <ShieldCheck size={20} />
-                        </button>
-                      )}
-                      {canManage && !row && (
-                        <button
-                          onClick={() => markAsLeave(u)}
-                          className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded hover:bg-amber-200"
-                        >
-                          Mark Leave
-                        </button>
-                      )}
-                      {!canManage && <span className="text-xs text-slate-300">-</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        ) : <span className="text-xs text-slate-300 italic">Not Submitted</span>}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {isLeave ? '-' : row ? (
+                          <ul className="list-disc pl-4 space-y-1">
+                            {(row.todayActuals || []).length === 0 && <li className="text-xs text-slate-400 list-none">No day-end actuals captured</li>}
+                            {(row.todayActuals || []).map((t, i) => (
+                              <li key={i}>
+                                {t.task}
+                                <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.actualTime || t.time || '-'} • {t.priority || 'Medium'} • {t.status || 'Completed'})</span>
+                                {t.blockerReason ? <span className="text-xs text-red-500"> - {t.blockerReason}</span> : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : <span className="text-xs text-slate-300 italic">Not Submitted</span>}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {isManagerView && row && !isLeave && (
+                          <button
+                            onClick={() => toggleApproval(row.id, row.approved)}
+                            className={`p-2 rounded-full transition-colors ${row.approved ? 'bg-green-100 text-green-600 hover:bg-green-200' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                          >
+                            <ShieldCheck size={20} />
+                          </button>
+                        )}
+                        {isManagerView && !row && (
+                          <button
+                            onClick={() => markAsLeave(u)}
+                            className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded hover:bg-amber-200"
+                          >
+                            Mark Leave
+                          </button>
+                        )}
+                        {!isManagerView && <span className="text-xs text-slate-300">-</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-)}
+      )}
       {generatedContent && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
@@ -1359,8 +1322,8 @@ except Exception as e:
                             return (
                               <tr key={idx} style={{ backgroundColor: bg }}>
                                 <td className="p-2 border font-bold">{row.userName}</td>
-                                <td className="p-2 border"><ul>{row.yesterdayWork.map(t => <li>{t.task}</li>)}</ul></td>
-                                <td className="p-2 border"><ul>{row.todayPlan.map(t => <li>{t.task}</li>)}</ul></td>
+                                <td className="p-2 border"><ul>{(row.yesterdayWork || []).map(t => <li>{t.task}</li>)}</ul></td>
+                                <td className="p-2 border"><ul>{(row.todayPlan || []).map(t => <li>{t.task}</li>)}</ul></td>
                               </tr>
                             );
                           })}
@@ -1456,7 +1419,6 @@ function ReportsView({ data }) {
     // Styling Headers
     const headerRow = sheet.getRow(1);
 
-    // Apply style to specific cells 1-8
     for (let i = 1; i <= 10; i++) {
       const cell = headerRow.getCell(i);
       cell.value = sheet.columns[i - 1].header;
@@ -1472,14 +1434,12 @@ function ReportsView({ data }) {
     }
 
     filteredData.forEach(doc => {
-      // Buckets
       const buckets = {
         'Hardware': { tasks: [], minutes: 0 },
         'SMNGUI': { tasks: [], minutes: 0 },
         'SM Core': { tasks: [], minutes: 0 }
       };
 
-      // Process Tasks
       if (doc.status !== 'LEAVE') {
         (doc.yesterdayWork || []).forEach(task => {
           const category = PROJECT_CATEGORIES[task.project] || 'SM Core';
@@ -1503,17 +1463,13 @@ function ReportsView({ data }) {
 
       const row = sheet.addRow(Object.values(rowValues));
 
-      // Handle Styling
       if (doc.status === 'LEAVE') {
-        // Merge cells 3 to 10 for leave rows
         sheet.mergeCells(row.number, 3, row.number, 10);
         const cell = sheet.getCell(row.number, 3);
         cell.value = "ON LEAVE";
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        // Yellow Fill, Black Text
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
         cell.font = { color: { argb: 'FF000000' }, bold: true };
-        // Borders
         for (let i = 1; i <= 10; i++) {
           const c = row.getCell(i);
           c.border = {
@@ -1522,21 +1478,17 @@ function ReportsView({ data }) {
             bottom: { style: 'thin' },
             right: { style: 'thin' }
           };
-          // Apply yellow fill to merged cells under the hood to ensure consistency
           if (i >= 3) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
         }
       } else {
-        // Regular wrapping for task columns
         [3, 4, 5, 7, 9].forEach(colIdx => {
           const cell = sheet.getCell(row.number, colIdx);
           cell.alignment = { wrapText: true, vertical: 'top' };
         });
-        // Center align time columns
         [6, 8, 10].forEach(colIdx => {
           sheet.getCell(row.number, colIdx).alignment = { horizontal: 'center', vertical: 'top' };
         });
 
-        // Borders for all cells in row
         row.eachCell((cell) => {
           cell.border = {
             top: { style: 'thin' },
@@ -1548,7 +1500,6 @@ function ReportsView({ data }) {
       }
     });
 
-    // Export
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = window.URL.createObjectURL(blob);
@@ -1592,12 +1543,14 @@ function ReportsView({ data }) {
 
 function AdminView({ users, setUsers, config, setConfig }) {
   const [newMember, setNewMember] = useState({ id: '', name: '', team: MEMBER_TEAMS[0], pin: '' });
+
   const handleAssign = (userId) => {
     if (window.confirm("Confirm: Assign this user as the new Weekly Scrum Master?")) {
       setConfig({ ...config, currentScrumMasterId: userId });
       alert("Scrum Master Updated Successfully!");
     }
   };
+
   const handleAddMember = () => {
     const payload = {
       id: newMember.id.trim(),
