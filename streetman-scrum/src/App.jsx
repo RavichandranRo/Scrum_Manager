@@ -3,10 +3,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 // Firebase imports intentionally commented per request (do not remove).
 import {
   LayoutDashboard, PlusCircle, Users, FileSpreadsheet, Copy, Mail, MessageSquare,
-  LogOut, ChevronDown, CheckCircle2, AlertTriangle, Lock, ShieldCheck, UserCog,
+  LogOut, X, ChevronDown, CheckCircle2, AlertTriangle, Lock, ShieldCheck, UserCog,
   Clock, CalendarCheck, WifiOff, CloudLightning, Database, RefreshCw, Send,
   User, ExternalLink, Download, Bell, Coffee, History
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 let configError = null;
 
@@ -29,6 +30,11 @@ const PROJECT_CATEGORIES = {
   'SNC': 'SNC',
   'AWS': 'AWS'
 };
+const PROJECT_OPTIONS = [...Object.keys(PROJECT_CATEGORIES), 'Others'];
+
+const AUDIT_LOGS_STORAGE_KEY = 'streetman_audit_logs';
+const APP_CONFIG_STORAGE_KEY = 'streetman_app_config';
+const JIRA_PATTERN = /[A-Z]{2,}-\d+/g;
 
 // HARDCODED TEAM MEMBERS
 const DEFAULT_USERS = [
@@ -54,7 +60,7 @@ const DEFAULT_USERS = [
 // --- HELPER FUNCTIONS ---
 const generateId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    try { return crypto.randomUUID(); } catch (e) {}
+    try { return crypto.randomUUID(); } catch (e) { }
   }
   return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
 };
@@ -75,7 +81,7 @@ const getPreviousDateString = (dateStr) => {
 const checkTimeWindows = (targetDateStr) => {
   const now = new Date();
   const hours = now.getHours();
-  
+
   return {
     isDayStartOpen: hours < 23, // Day start open until 11:00 PM
     isDayEndOpen: hours >= 17 && hours < 23 // Day end open from 5:00 PM to 11:00 PM
@@ -94,6 +100,17 @@ const parseDurationToMinutes = (timeStr) => {
   if (minsMatch) totalMinutes += parseFloat(minsMatch[1]);
   return Math.round(totalMinutes);
 };
+
+const toExcelColumn = (index) => {
+  let column = '';
+  while (index > 0) {
+    const remainder = (index - 1) % 26;
+    column = String.fromCharCode(65 + remainder) + column;
+    index = Math.floor((index - 1) / 26);
+  }
+  return column;
+};
+
 const durationToHours = (timeStr) => parseDurationToMinutes(timeStr) / 60;
 const formatMinutesToDuration = (minutes) => {
   if (minutes === 0) return "";
@@ -104,11 +121,209 @@ const formatMinutesToDuration = (minutes) => {
   return `${m}m`;
 };
 
+const parseTaskListFromText = (text) => {
+  const rawLines = String(text).split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (rawLines.length <= 1) return rawLines;
+  const items = rawLines.reduce((acc, line) => {
+    const cleaned = line.replace(/^([\u2022\-\*\d+\.]+)\s*/, '').trim();
+    if (cleaned) acc.push(cleaned);
+    return acc;
+  }, []);
+  return items.length > 0 ? items : rawLines;
+};
+
+const extractJiraId = (text) => {
+  if (!text) return '';
+  const match = text.match(JIRA_PATTERN);
+  return match ? match[0] : '';
+};
+
+const getISTString = (dateValue = new Date()) => {
+  return new Date(dateValue).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric', month: 'short', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+};
+
+const getWeekStartDate = (dateStr) => {
+  const date = new Date(dateStr);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  return date.toISOString().split('T')[0];
+};
+
+const buildOutlookEmailHtml = (selectedDate, currentSM, dailyData) => {
+  const generatedOn = new Date().toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  }) + ' IST';
+
+  let htmlTable = `
+    <div style="max-width: 900px; margin: 0 auto; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333;">
+      <div style="background-color: #f8fafc; border: 1px solid #1e3a8a; border-radius: 8px 8px 0 0; overflow: hidden;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border-spacing: 0;">
+          <tr>
+            <td style="width: 6px; background-color: #1e3a8a;"></td>
+            <td style="padding: 20px 24px; background-color: #1e3a8a;">
+              <h1 style="margin: 0; color: white; font-size: 28px; font-weight: 700; text-align: center;">StreetMan Scrum Status</h1>
+              <p style="margin: 8px 0 0 0; color: #e0e7ff; font-size: 14px; text-align: center;">Daily Standup Report</p>
+            </td>
+          </tr>
+        </table>
+      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border-top: 1px solid #1e3a8a; background-color: #f0f4ff;">
+        <tr>
+          <td style="padding: 16px 20px; vertical-align: top; width: 50%;">
+            <p style="margin: 0; color: #666; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Report Date</p>
+            <p style="margin: 4px 0 0 0; color: #1e3a8a; font-size: 18px; font-weight: 700;">${formatDate(selectedDate)}</p>
+          </td>
+          <td style="padding: 16px 20px; vertical-align: top; width: 50%; text-align: right;">
+            <p style="margin: 0; color: #666; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Scrum Master</p>
+            <p style="margin: 4px 0 0 0; color: #1e3a8a; font-size: 18px; font-weight: 700;">${currentSM?.name || 'N/A'}</p>
+          </td>
+        </tr>
+      </table>
+      <div style="padding: 24px 20px; background: white;">
+        <p style="margin: 0 0 20px 0; color: #555; font-size: 15px;">Hi Team,</p>
+        <p style="margin: 0 0 24px 0; color: #555; font-size: 15px;">Please find the scrum status summary below.</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <thead>
+            <tr style="background-color: #1e3a8a; color: white;">
+              <th style="padding: 14px 12px; text-align: left; font-weight: 700; font-size: 14px; border-bottom: 3px solid #1e3a8a; letter-spacing: 0.5px; white-space: nowrap;">Team Member</th>
+              <th style="padding: 14px 12px; text-align: left; font-weight: 700; font-size: 14px; border-bottom: 3px solid #1e3a8a; letter-spacing: 0.5px; white-space: nowrap;">Yesterday's Work</th>
+              <th style="padding: 14px 12px; text-align: left; font-weight: 700; font-size: 14px; border-bottom: 3px solid #1e3a8a; letter-spacing: 0.5px; white-space: nowrap;">Today's Plan</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+  dailyData.forEach((row, idx) => {
+    const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafb';
+    const borderColor = idx === dailyData.length - 1 ? '2px solid #e5e7eb' : '1px solid #e5e7eb';
+    if (row.status === 'LEAVE') {
+      htmlTable += `<tr style="background-color: ${bg};">
+        <td style="padding: 14px 12px; border-bottom: ${borderColor}; font-weight: 600; color: #1e3a8a;">${row.userName}</td>
+        <td style="padding: 14px 12px; border-bottom: ${borderColor}; text-align: center; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #92400e; font-weight: 600;" colspan="2">🏖️ ON LEAVE</td>
+      </tr>`;
+    } else {
+      const yesterday = row.yesterdayWork.length > 0
+        ? row.yesterdayWork.map(t => `<li style="margin: 4px 0; color: #333; font-size: 14px;">${t.task}</li>`).join('')
+        : '<li style="margin: 4px 0; color: #999; font-size: 14px; font-style: italic;">No tasks tracked</li>';
+      const today = row.todayPlan.length > 0
+        ? row.todayPlan.map(t => `<li style="margin: 4px 0; color: #333; font-size: 14px;">${t.task}</li>`).join('')
+        : '<li style="margin: 4px 0; color: #999; font-size: 14px; font-style: italic;">No tasks planned</li>';
+
+      htmlTable += `<tr style="background-color: ${bg}; transition: background-color 0.2s;">
+        <td style="padding: 14px 12px; border-bottom: ${borderColor}; font-weight: 600; color: #1e3a8a;">${row.userName}</td>
+        <td style="padding: 14px 12px; border-bottom: ${borderColor};"><ul style="margin: 0; padding-left: 20px;">${yesterday}</ul></td>
+        <td style="padding: 14px 12px; border-bottom: ${borderColor};"><ul style="margin: 0; padding-left: 20px;">${today}</ul></td>
+      </tr>`;
+    }
+  });
+
+  htmlTable += `</tbody>
+        </table>
+      </div>
+      <div style="padding: 20px 20px 0 20px; background: #f9fafb; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
+        <p style="margin: 0 0 8px 0; color: #1f2937; font-size: 15px; font-weight: 700;">Thanks,</p>
+        <p style="margin: 0 0 16px 0; color: #374151; font-size: 14px;">${currentSM?.name || 'StreetMan Scrum Automation'}</p>
+      </div>
+      <div style="background: #0f172a; padding: 24px 20px; text-align: center; color: #cbd5e1; border-radius: 0 0 8px 8px;">
+        <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #f8fafc;">StreetMan Scrum Automation</p>
+        <p style="margin: 0 0 16px 0; font-size: 12px; color: #94a3b8;">Automated daily standup reporting system</p>
+        <div style="margin: 0 auto 16px auto; width: 48px; height: 2px; background: rgba(255,255,255,0.16);"></div>
+        <p style="margin: 0; font-size: 11px; color: #94a3b8;">Generated on ${generatedOn}</p>
+      </div>
+    </div>`;
+
+  return htmlTable;
+};
+
 // --- GLOBAL STYLES ---
-const inputBase = "border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:text-slate-400 transition-colors";
+const inputBase = "border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm px-3 py-2 outline-none transition-all duration-300 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 dark:focus:ring-indigo-400 dark:focus:ring-offset-1 focus:border-indigo-500 rounded-lg disabled:bg-slate-100 dark:disabled:bg-slate-900 disabled:text-slate-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm hover:shadow-md";
+
+// Material Design CSS animations (injected into page head)
+const materialDesignStyles = `
+  <style>
+    @keyframes ripple {
+      from {
+        background-size: 100% 100%;
+      }
+      to {
+        background-size: 0 0;
+      }
+    }
+    
+    @keyframes slideInFromRight {
+      from {
+        transform: translateX(20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes slideInFromBottom {
+      from {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    
+    .ripple-button {
+      position: relative;
+      overflow: hidden;
+      background-position: center;
+      transition: background 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    
+    .ripple-button::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    
+    .ripple-button:active::before {
+      width: 300px;
+      height: 300px;
+      animation: ripple 0.6s ease-out;
+    }
+    
+    .card-elevation {
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.06);
+      transition: box-shadow 0.2s ease;
+    }
+    
+    .card-elevation:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+`;
 
 // --- CUSTOM COMPONENTS ---
-const AutoResizeTextarea = ({ value, onChange, placeholder, disabled, className }) => {
+const AutoResizeTextarea = ({ value, onChange, onPaste, placeholder, disabled, className }) => {
   const textareaRef = useRef(null);
 
   useEffect(() => {
@@ -124,6 +339,7 @@ const AutoResizeTextarea = ({ value, onChange, placeholder, disabled, className 
       rows={1}
       value={value}
       onChange={onChange}
+      onPaste={onPaste}
       placeholder={placeholder}
       disabled={disabled}
       className={`resize-none overflow-hidden ${className}`}
@@ -176,44 +392,283 @@ const TimeInput = ({ hours, minutes, onHoursChange, onMinutesChange, disabled })
   );
 };
 
+// --- NOTIFICATION COMPONENT ---
+const Notification = ({ show, type, message }) => {
+  if (!show) return null;
+
+  const stylesByType = {
+    success: {
+      bg: 'bg-emerald-50 dark:bg-emerald-900/30',
+      border: 'border-emerald-200 dark:border-emerald-700',
+      icon: '✓',
+      iconBg: 'bg-emerald-100 dark:bg-emerald-800',
+      text: 'text-emerald-800 dark:text-emerald-200',
+      title: 'text-emerald-900 dark:text-emerald-100'
+    },
+    error: {
+      bg: 'bg-red-50 dark:bg-red-900/30',
+      border: 'border-red-200 dark:border-red-700',
+      icon: '✕',
+      iconBg: 'bg-red-100 dark:bg-red-800',
+      text: 'text-red-800 dark:text-red-200',
+      title: 'text-red-900 dark:text-red-100'
+    },
+    warning: {
+      bg: 'bg-amber-50 dark:bg-amber-900/30',
+      border: 'border-amber-200 dark:border-amber-700',
+      icon: '!',
+      iconBg: 'bg-amber-100 dark:bg-amber-800',
+      text: 'text-amber-800 dark:text-amber-200',
+      title: 'text-amber-900 dark:text-amber-100'
+    },
+    info: {
+      bg: 'bg-blue-50 dark:bg-blue-900/30',
+      border: 'border-blue-200 dark:border-blue-700',
+      icon: 'ℹ',
+      iconBg: 'bg-blue-100 dark:bg-blue-800',
+      text: 'text-blue-800 dark:text-blue-200',
+      title: 'text-blue-900 dark:text-blue-100'
+    }
+  };
+
+  const styles = stylesByType[type] || stylesByType.info;
+
+  return (
+    <div className={`fixed bottom-6 right-6 z-[9999] animate-in slide-in-from-bottom-5 duration-300`}>
+      <div className={`${styles.bg} border ${styles.border} rounded-lg shadow-lg p-4 max-w-sm`}>
+        <div className="flex gap-4">
+          <div className={`${styles.iconBg} rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0 font-bold ${styles.title}`}>
+            {styles.icon}
+          </div>
+          <div className="flex-1 py-1">
+            <p className={`${styles.title} font-semibold text-sm mb-1 capitalize`}>{type}</p>
+            <p className={`${styles.text} text-sm leading-relaxed`}>{message}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AppModal = ({ open, type, title, message, inputValue, placeholder, inputType, onChange, onClose, onSubmit }) => {
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (open && type === 'prompt' && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [open, type]);
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[9998] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{title || 'Confirmation'}</h3>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-slate-700 dark:text-slate-300">{message}</p>
+          {type === 'prompt' && (
+            <input
+              ref={inputRef}
+              type={inputType || 'text'}
+              value={inputValue}
+              placeholder={placeholder || ''}
+              onChange={(e) => onChange(e.target.value)}
+              className="w-full rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-500/20"
+            />
+          )}
+        </div>
+        <div className="flex justify-end gap-3 px-6 py-4 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-700">
+          <button onClick={onClose} className="px-4 py-2 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition">Cancel</button>
+          <button onClick={onSubmit} className="px-4 py-2 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 transition">Confirm</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- MAIN APP COMPONENT ---
 export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('login');
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
-  const [users, setUsers] = useState(() => {
+  const [modalState, setModalState] = useState({ open: false, mode: 'confirm', title: '', message: '', inputValue: '', placeholder: '', inputType: 'text' });
+  const modalResolver = useRef(null);
+  // SERVER SYNC HELPER - Gracefully falls back if backend endpoint doesn't exist
+  const syncSystemData = async (payload) => {
+    try {
+      await fetch(`${BACKEND_URL}/api/system-data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      // Backend route /api/system-data not configured yet, falling back to local
+    }
+  };
+
+  // WRAPPED STATE SETTERS (Automatically pushes to Backend and LocalStorage)
+  const [appConfigState, setAppConfigState] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(APP_CONFIG_STORAGE_KEY) || 'null');
+      return stored || { currentScrumMasterId: '1349' };
+    } catch {
+      return { currentScrumMasterId: '1349' };
+    }
+  });
+
+  const setAppConfig = (value) => {
+    setAppConfigState(prev => {
+      const newConfig = typeof value === 'function' ? value(prev) : value;
+      localStorage.setItem(APP_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
+      syncSystemData({ appConfig: newConfig });
+      return newConfig;
+    });
+  };
+
+  const [auditLogsState, setAuditLogsState] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(AUDIT_LOGS_STORAGE_KEY)) || []; }
+    catch { return []; }
+  });
+
+  const setAuditLogs = (value) => {
+    setAuditLogsState(prev => {
+      const newLogs = typeof value === 'function' ? value(prev) : value;
+      localStorage.setItem(AUDIT_LOGS_STORAGE_KEY, JSON.stringify(newLogs));
+      syncSystemData({ auditLogs: newLogs });
+      return newLogs;
+    });
+  };
+
+  const [usersState, setUsersState] = useState(() => {
     try {
       const storedUsers = JSON.parse(localStorage.getItem(CUSTOM_USERS_STORAGE_KEY) || '[]');
-      return [...DEFAULT_USERS, ...storedUsers];
-    } catch {
-      return DEFAULT_USERS;
-    }
+      const merged = [...DEFAULT_USERS];
+      storedUsers.forEach(su => {
+        const idx = merged.findIndex(d => d.id === su.id);
+        if (idx >= 0) merged[idx] = su;
+        else merged.push(su);
+      });
+      return merged;
+    } catch { return DEFAULT_USERS; }
   });
+
+  const setUsers = (value) => {
+    setUsersState(prev => {
+      const newUsers = typeof value === 'function' ? value(prev) : value;
+      const customUsers = newUsers.filter((u) => !DEFAULT_USERS.some((d) => d.id === u.id) || u.pin !== DEFAULT_USERS.find(d => d.id === u.id)?.pin);
+      localStorage.setItem(CUSTOM_USERS_STORAGE_KEY, JSON.stringify(customUsers));
+      syncSystemData({ users: newUsers });
+      return newUsers;
+    });
+  };
+
   const [customProjects, setCustomProjects] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(CUSTOM_PROJECTS_STORAGE_KEY) || '[]');
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(localStorage.getItem(CUSTOM_PROJECTS_STORAGE_KEY) || '[]'); }
+    catch { return []; }
   });
-
-  const [statusData, setStatusData] = useState([]);
-  const [appConfig, setAppConfig] = useState({ currentScrumMasterId: '1349' });
-
-  const [authError, setAuthError] = useState(null);
-  const [dbError, setDbError] = useState(null);
-
-  useEffect(() => {
-    const customUsers = users.filter((u) => !DEFAULT_USERS.some((d) => d.id === u.id));
-    localStorage.setItem(CUSTOM_USERS_STORAGE_KEY, JSON.stringify(customUsers));
-  }, [users]);
 
   useEffect(() => {
     localStorage.setItem(CUSTOM_PROJECTS_STORAGE_KEY, JSON.stringify(customProjects));
   }, [customProjects]);
 
+  const [statusData, setStatusData] = useState([]);
+
+  const [authError, setAuthError] = useState(null);
+  const [dbError, setDbError] = useState(null);
+  const [notification, setNotification] = useState({ show: false, type: 'info', message: '' });
+
+  const showNotification = (type, message) => {
+    setNotification({ show: true, type, message });
+    const timer = setTimeout(() => setNotification({ show: false, type: 'info', message: '' }), 3500);
+    return timer;
+  };
+
+  const closeModal = () => {
+    setModalState((prev) => ({ ...prev, open: false }));
+    if (modalResolver.current) {
+      modalResolver.current(false);
+      modalResolver.current = null;
+    }
+  };
+
+  const showConfirm = (message, title = 'Confirm Action') => new Promise((resolve) => {
+    modalResolver.current = resolve;
+    setModalState({ open: true, mode: 'confirm', title, message, inputValue: '', placeholder: '', inputType: 'text' });
+  });
+
+  const showPrompt = (message, title = 'Enter value', placeholder = '', inputType = 'text') => new Promise((resolve) => {
+    modalResolver.current = resolve;
+    setModalState({ open: true, mode: 'prompt', title, message, inputValue: '', placeholder, inputType });
+  });
+
+  const handleModalSubmit = () => {
+    const value = modalState.mode === 'prompt' ? modalState.inputValue : true;
+    setModalState((prev) => ({ ...prev, open: false }));
+    if (modalResolver.current) {
+      modalResolver.current(value);
+      modalResolver.current = null;
+    }
+  };
+
+  const handleModalChange = (value) => {
+    setModalState((prev) => ({ ...prev, inputValue: value }));
+  };
+
+  useEffect(() => {
+    const customUsers = usersState.filter((u) => !DEFAULT_USERS.some((d) => d.id === u.id));
+    localStorage.setItem(CUSTOM_USERS_STORAGE_KEY, JSON.stringify(customUsers));
+  }, [usersState]);
+
+  useEffect(() => {
+    localStorage.setItem(CUSTOM_PROJECTS_STORAGE_KEY, JSON.stringify(customProjects));
+  }, [customProjects]);
+
+  useEffect(() => {
+    localStorage.setItem(AUDIT_LOGS_STORAGE_KEY, JSON.stringify(auditLogsState));
+  }, [auditLogsState]);
+
+  useEffect(() => {
+    localStorage.setItem(APP_CONFIG_STORAGE_KEY, JSON.stringify(appConfigState));
+  }, [appConfigState]);
+
   const isAdmin = currentUserProfile?.role === 'ADMIN';
-  const isScrumMaster = currentUserProfile?.id === appConfig.currentScrumMasterId || isAdmin;
+  const isScrumMaster = currentUserProfile?.id === appConfigState.currentScrumMasterId || isAdmin;
+
+  const recordAudit = ({ userName, action, targetDate, details }) => {
+    const entry = {
+      id: generateId(),
+      timestamp: new Date().toISOString(),
+      userName,
+      action,
+      targetDate: targetDate || getTodayString(),
+      details: details || ''
+    };
+    setAuditLogs((prev) => [entry, ...prev]);
+  };
+
+  useEffect(() => {
+    const currentWeek = getWeekStartDate(getTodayString());
+    if (appConfigState.lastRotationWeek === currentWeek) return;
+    const eligible = usersState.filter((user) => user.role !== 'ADMIN');
+    if (!eligible.length) return;
+
+    const currentIndex = eligible.findIndex((user) => user.id === appConfigState.currentScrumMasterId);
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % eligible.length : 0;
+    setAppConfig((prev) => ({
+      ...prev,
+      currentScrumMasterId: eligible[nextIndex].id,
+      lastRotationWeek: currentWeek
+    }));
+    recordAudit({
+      userName: eligible[nextIndex].name,
+      action: 'Assigned Weekly Scrum Master',
+      targetDate: currentWeek,
+      details: `Auto-rotated based on order to ${eligible[nextIndex].name}`
+    });
+  }, [appConfigState.lastRotationWeek, appConfigState.currentScrumMasterId, usersState]);
 
   // --- AUTH LOADING ---
   useEffect(() => {
@@ -228,6 +683,17 @@ export default function App() {
     const fetchStatuses = async () => {
       try {
         const res = await fetch(`${BACKEND_URL}/api/daily-status`);
+        if (res.ok) {
+          const data = await res.json();
+
+          if (data?.appConfig?.currentScrumMasterId) {
+            setAppConfig(prev => ({
+              ...prev,
+              ...data.appConfig
+            }));
+          }
+        }
+
         if (!res.ok) throw new Error("Failed to fetch data");
         const data = await res.json();
         setStatusData(data);
@@ -237,26 +703,88 @@ export default function App() {
         setDbError("Could not connect to database server at " + BACKEND_URL);
       }
     };
+    // Load System Configuration from Server to sync across all browsers
+    const fetchSystemData = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/system-data`);
+        if (!res.ok) return;
 
+        const data = await res.json();
+
+        if (data?.appConfig?.currentScrumMasterId) {
+          setAppConfig(prev => ({
+            ...prev,
+            ...data.appConfig
+          }));
+        }
+
+        if (data?.auditLogs) setAuditLogsState(data.auditLogs);
+        if (data?.users) setUsersState(data.users);
+
+      } catch (err) {
+        console.warn("Using local config (API failed)");
+      }
+    };
+
+    fetchSystemData();
     fetchStatuses();
     const interval = setInterval(fetchStatuses, 10000);
     return () => clearInterval(interval);
   }, [user]);
 
   // --- HANDLERS ---
-  const handleLogin = (profile) => {
-    const pin = window.prompt(`Enter PIN for ${profile.name}:`);
+  const handleLogin = async (profile) => {
+    const pin = await showPrompt(`Enter PIN for ${profile.name}:`, 'Login PIN', 'PIN', 'password');
     if (!pin || pin !== profile.pin) {
-      alert("Incorrect credentials. Access Denied.");
+      showNotification('error', "Incorrect credentials. Access Denied.");
       return;
     }
     setCurrentUserProfile(profile);
     setActiveTab('input');
+    recordAudit({
+      userName: profile.name,
+      action: 'Logged In',
+      targetDate: getTodayString(),
+      details: `User ${profile.name} logged in`,
+    });
   };
 
   const handleLogout = () => {
+    if (currentUserProfile) {
+      recordAudit({
+        userName: currentUserProfile.name,
+        action: 'Logged Out',
+        targetDate: getTodayString(),
+        details: `User ${currentUserProfile.name} logged out`,
+      });
+    }
     setCurrentUserProfile(null);
     setActiveTab('login');
+  };
+
+  const handleChangePin = async (profile) => {
+    const currentPin = await showPrompt(`Enter current PIN for ${profile.name}:`, 'Current PIN', 'Current PIN', 'password');
+    if (!currentPin || currentPin !== profile.pin) {
+      showNotification('error', 'Incorrect current PIN.');
+      return;
+    }
+    const newPin = await showPrompt(`Enter new PIN for ${profile.name}:`, 'New PIN', 'New PIN', 'password');
+    if (!newPin || newPin.trim().length < 3) {
+      showNotification('error', 'New PIN must be at least 3 characters.');
+      return;
+    }
+    const updatedUsers = usersState.map((u) => u.id === profile.id ? { ...u, pin: newPin.trim() } : u);
+    setUsers(updatedUsers);
+    if (currentUserProfile?.id === profile.id) {
+      setCurrentUserProfile({ ...profile, pin: newPin.trim() });
+    }
+    recordAudit({
+      userName: currentUserProfile?.name || profile.name,
+      action: 'Changed PIN',
+      targetDate: getTodayString(),
+      details: currentUserProfile?.id === profile.id ? `Self changed PIN.` : `Changed PIN for ${profile.name}`
+    });
+    showNotification('success', 'PIN updated successfully.');
   };
 
   // --- RENDER ---
@@ -275,41 +803,57 @@ export default function App() {
   // --- LOGIN SCREEN ---
   if (!currentUserProfile || activeTab === 'login') {
     return (
-      <div className="w-screen h-screen bg-slate-100 flex items-center justify-center p-4 overflow-hidden">
-        <div className="bg-white max-w-md w-full rounded-2xl shadow-xl p-8">
-          <div className="text-center mb-8">
-            <div className="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <LayoutDashboard className="text-indigo-600" size={32} />
+      <>
+        <div className="w-screen h-screen bg-slate-100 flex items-center justify-center p-4 overflow-hidden">
+          <div className="bg-white max-w-md w-full rounded-2xl shadow-xl p-8">
+            <div className="text-center mb-8">
+              <div className="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <LayoutDashboard className="text-indigo-600" size={32} />
+              </div>
+              <h1 className="text-2xl font-bold text-slate-800">ScrumMan</h1>
+              <p className="text-slate-500">Select your profile to continue</p>
             </div>
-            <h1 className="text-2xl font-bold text-slate-800">ScrumMan</h1>
-            <p className="text-slate-500">Select your profile to continue</p>
-          </div>
 
-          <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-            {users.map(u => (
-              <button
-                key={u.id}
-                onClick={() => handleLogin(u)}
-                className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition text-left group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs group-hover:text-white transition-colors ${u.role === 'ADMIN' ? 'bg-red-100 text-red-600 group-hover:bg-red-500' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-600'}`}>
-                    {u.role === 'ADMIN' ? <Lock size={12} /> : u.name.charAt(0)}
+            <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+              {usersState.map(u => (
+                <button
+                  key={u.id}
+                  onClick={() => handleLogin(u)}
+                  className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50 transition text-left group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs group-hover:text-white transition-colors ${u.role === 'ADMIN' ? 'bg-red-100 text-red-600 group-hover:bg-red-500' : 'bg-slate-100 text-slate-600 group-hover:bg-indigo-600'}`}>
+                      {u.role === 'ADMIN' ? <Lock size={12} /> : u.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-700 group-hover:text-indigo-700">{u.name}</p>
+                      <p className="text-xs text-slate-500">{u.team}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-slate-700 group-hover:text-indigo-700">{u.name}</p>
-                    <p className="text-xs text-slate-500">{u.team}</p>
-                  </div>
-                </div>
-                {u.role === 'ADMIN' && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">LOCKED</span>}
-                {u.id === appConfig.currentScrumMasterId && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold">SM</span>}
-              </button>
-            ))}
+                  {u.role === 'ADMIN' && <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">LOCKED</span>}
+                  {u.id === appConfigState.currentScrumMasterId && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold">SM</span>}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+        <AppModal
+          open={modalState.open}
+          type={modalState.mode}
+          title={modalState.title}
+          message={modalState.message}
+          inputValue={modalState.inputValue}
+          placeholder={modalState.placeholder}
+          inputType={modalState.inputType}
+          onChange={handleModalChange}
+          onClose={closeModal}
+          onSubmit={handleModalSubmit}
+        />
+        <Notification show={notification.show} type={notification.type} message={notification.message} />
+      </>
     );
   }
+  const assignedScrumMaster = usersState.find(u => u.id === appConfigState.currentScrumMasterId) || currentUserProfile;
 
   return (
     <div className="w-screen min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-slate-100 overflow-x-hidden">
@@ -328,11 +872,11 @@ export default function App() {
                 <NavButton active={activeTab === 'input'} onClick={() => setActiveTab('input')} icon={<PlusCircle size={18} />}>
                   Daily Input
                 </NavButton>
+                <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Users size={18} />}>
+                  Scrum Board
+                </NavButton>
                 {(isScrumMaster || isAdmin) && (
                   <>
-                    <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Users size={18} />}>
-                      Scrum Board
-                    </NavButton>
                     <NavButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} icon={<FileSpreadsheet size={18} />}>
                       Reports
                     </NavButton>
@@ -367,7 +911,7 @@ export default function App() {
                     <>
                       <div className="px-4 py-2 text-[10px] font-bold text-slate-400 uppercase bg-slate-50 dark:bg-slate-700/50">Switch Account</div>
                       <div className="max-h-48 overflow-y-auto">
-                        {users.filter(u => u.id !== currentUserProfile.id).map(u => (
+                        {usersState.filter(u => u.id !== currentUserProfile.id).map(u => (
                           <button
                             key={u.id}
                             onClick={() => handleLogin(u)}
@@ -380,6 +924,12 @@ export default function App() {
                       <div className="border-t border-slate-100 dark:border-slate-700 my-1"></div>
                     </>
                   )}
+                  <button
+                    onClick={() => handleChangePin(currentUserProfile)}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/30 flex items-center gap-2"
+                  >
+                    <Lock size={14} /> Change PIN
+                  </button>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 flex items-center gap-2"
@@ -408,21 +958,29 @@ export default function App() {
               customProjects={customProjects}
               setCustomProjects={setCustomProjects}
               setStatusData={setStatusData}
+              recordAudit={recordAudit}
+              showConfirm={showConfirm}
+              showNotification={showNotification}
             />
           )}
-          {activeTab === 'dashboard' && (isScrumMaster || isAdmin) && <DashboardView data={statusData} currentSM={currentUserProfile} users={users} canManage={isScrumMaster || isAdmin} setStatusData={setStatusData} />}
-          {activeTab === 'reports' && (isScrumMaster || isAdmin) && <ReportsView data={statusData} />}
-          {activeTab === 'logs' && (isScrumMaster || isAdmin) && <AuditLogsView data={statusData} />}
+          {activeTab === 'dashboard' && <DashboardView data={statusData} loggedInUser={currentUserProfile} assignedSM={assignedScrumMaster} users={usersState} canManage={isScrumMaster || isAdmin} setStatusData={setStatusData} recordAudit={recordAudit} showConfirm={showConfirm} showNotification={showNotification} />}
+          {activeTab === 'reports' && (isScrumMaster || isAdmin) && <ReportsView data={statusData} showNotification={showNotification} />}
+          {activeTab === 'logs' && (isScrumMaster || isAdmin) && <AuditLogsView data={auditLogsState} showNotification={showNotification} />}
           {activeTab === 'admin' && isAdmin && (
             <AdminView
-              users={users}
-              setUsers={setUsers}
-              config={appConfig}
-              setConfig={setAppConfig}
+              users={usersState}
+              setUsers={setUsersState}
+              config={appConfigState}
+              setAppConfig={setAppConfig}
+              currentUserProfile={currentUserProfile}
+              recordAudit={recordAudit}
+              handleChangePin={handleChangePin}
+              showNotification={showNotification}
+              showConfirm={showConfirm}
             />
           )}
 
-          {!isScrumMaster && !isAdmin && activeTab !== 'input' && (
+          {!isScrumMaster && !isAdmin && activeTab !== 'input' && activeTab !== 'dashboard' && (
             <div className="flex flex-col items-center justify-center h-64 text-slate-400">
               <Lock size={48} className="mb-4 text-slate-300 dark:text-slate-600" />
               <p>Restricted Access. Only Scrum Master/Admin can view this.</p>
@@ -430,6 +988,20 @@ export default function App() {
           )}
         </div>
       </main>
+
+      <Notification show={notification.show} type={notification.type} message={notification.message} />
+      <AppModal
+        open={modalState.open}
+        type={modalState.mode}
+        title={modalState.title}
+        message={modalState.message}
+        inputValue={modalState.inputValue}
+        placeholder={modalState.placeholder}
+        inputType={modalState.inputType}
+        onChange={handleModalChange}
+        onClose={closeModal}
+        onSubmit={handleModalSubmit}
+      />
     </div>
   );
 }
@@ -458,7 +1030,7 @@ const NavButton = ({ active, onClick, children, icon }) => (
 );
 
 // --- VIEW 1: Input Status ---
-function InputView({ currentUserProfile, existingData, customProjects, setCustomProjects, setStatusData }) {
+function InputView({ currentUserProfile, existingData, customProjects, setCustomProjects, setStatusData, recordAudit, showConfirm, showNotification }) {
   const [inputDate, setInputDate] = useState(getTodayString());
   const [loading, setLoading] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
@@ -478,7 +1050,41 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
   });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
-  const allProjects = useMemo(() => [...PROJECTS, ...customProjects], [customProjects]);
+  const projectOptions = useMemo(() => PROJECT_OPTIONS, []);
+
+  const createTaskItem = (section) => ({
+    task: '',
+    project: '',
+    customProject: '',
+    hours: '0',
+    minutes: '0',
+    priority: 'Medium',
+    status: section === 'todayActuals' ? 'Completed' : undefined,
+    isBlocked: false,
+    blockerReason: '',
+    jiraId: ''
+  });
+
+  const normalizeProjectValue = (project, customProject) => {
+    if (project === 'Others') return customProject.trim() || 'Others';
+    return project || '';
+  };
+
+  const handleTaskPaste = (section, index, event) => {
+    const pastedText = event.clipboardData.getData('text');
+    const items = parseTaskListFromText(pastedText);
+    if (items.length <= 1) return;
+
+    event.preventDefault();
+    setIsDirty(true);
+    const currentSection = [...formData[section]];
+    currentSection[index].task = items[0];
+    const newTasks = items.slice(1).map(() => createTaskItem(section));
+    newTasks.forEach((task, idx) => {
+      task.task = items[idx + 1];
+    });
+    setFormData({ ...formData, [section]: [...currentSection.slice(0, index + 1), ...newTasks, ...currentSection.slice(index + 1)] });
+  };
 
   useEffect(() => {
     setIsDirty(false);
@@ -506,6 +1112,9 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
         ...t,
         hours: parsedTime.hours,
         minutes: parsedTime.minutes,
+        project: t.project || '',
+        customProject: t.project === 'Others' ? (t.customProject || '') : '',
+        jiraId: t.jiraId || extractJiraId(t.task),
         isBlocked: !!(t.blockerReason && t.blockerReason.trim().length > 0)
       };
     };
@@ -534,8 +1143,8 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
         }));
 
       setFormData({
-        yesterdayWork: autoYesterday.length > 0 ? autoYesterday : [{ task: '', project: 'SMNGUI', hours: '0', minutes: '0', status: 'Completed', priority: 'Medium', isBlocked: false, blockerReason: '' }],
-        todayPlan: [{ task: '', project: 'SMNGUI', hours: '0', minutes: '0', priority: 'Medium' }],
+        yesterdayWork: autoYesterday.length > 0 ? autoYesterday : [createTaskItem('yesterdayWork')],
+        todayPlan: [createTaskItem('todayPlan')],
         todayActuals: []
       });
     }
@@ -546,26 +1155,23 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
     setIsDirty(true);
     const newSection = [...formData[section]];
     newSection[index][field] = value;
+    if (field === 'task') {
+      newSection[index].jiraId = extractJiraId(value);
+    }
+    if (field === 'project' && value !== 'Others') {
+      newSection[index].customProject = '';
+    }
     setFormData({ ...formData, [section]: newSection });
-  };
-
-  const addCustomProject = (value) => {
-    const normalized = value.trim();
-    if (!normalized) return;
-    if ([...PROJECTS, ...customProjects].some((p) => p.toLowerCase() === normalized.toLowerCase())) return;
-    setCustomProjects((prev) => [...prev, normalized]);
   };
 
   const addTask = (section) => {
     setIsDirty(true);
-    const item = { task: '', project: 'SMNGUI', hours: '0', minutes: '0', priority: 'Medium', isBlocked: false, blockerReason: '' };
-    if (section !== 'todayPlan') item.status = 'Completed';
-    setFormData({ ...formData, [section]: [...formData[section], item] });
+    setFormData({ ...formData, [section]: [...formData[section], createTaskItem(section)] });
   };
 
   const removeTask = (section, index) => {
     if (formData[section].length <= 1) {
-      alert("You must have at least one task in this section.");
+      showNotification('error', "You must have at least one task in this section.");
       return;
     }
     setIsDirty(true);
@@ -576,27 +1182,32 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isDayStartOpen && !isDayEndOpen) {
-      alert("Status window is closed. You can submit only during allowed day-start/day-end timings.");
+      showNotification('error', "Status window is closed. You can submit only during allowed day-start/day-end timings.");
       return;
     }
     const blockedWithoutReason = formData.todayActuals.some(
       (task) => task.isBlocked && !(task.blockerReason || '').trim()
     );
     if (blockedWithoutReason) {
-      alert("Please provide a blocker reason for all checked blocked tasks before saving.");
+      showNotification('error', "Please provide a blocker reason for all checked blocked tasks before saving.");
       return;
     }
-    if (!window.confirm(`Are you sure you want to submit your status for ${formatDate(inputDate)}?`)) return;
+    const confirmed = await showConfirm(`Are you sure you want to submit your status for ${formatDate(inputDate)}?`, 'Submit Status');
+    if (!confirmed) return;
 
     setSubmitting(true);
     setMessage(null);
     const now = new Date().toISOString();
 
     const formatSavedTask = (t, isActuals = false) => {
+      const finalProject = normalizeProjectValue(t.project, t.customProject);
       const payload = {
-        task: t.task, project: t.project, priority: t.priority,
+        task: t.task,
+        project: finalProject,
+        priority: t.priority,
         status: t.status || 'Completed',
-        blockerReason: t.isBlocked ? t.blockerReason : ''
+        blockerReason: t.isBlocked ? t.blockerReason : '',
+        jiraId: t.jiraId || extractJiraId(t.task)
       };
       const h = parseFloat(t.hours || 0);
       const m = parseInt(t.minutes || 0, 10);
@@ -637,15 +1248,27 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 
       if (isUpdateMode) {
         setStatusData(prev => prev.map(record => record.id === payload.id ? { ...record, ...payload } : record));
+        recordAudit({
+          userName: currentUserProfile.name,
+          action: 'Updated Status',
+          targetDate: payload.date,
+          details: `Updated status with ${payload.todayPlan.length} plan item(s) and ${payload.todayActuals.length} actual item(s).`
+        });
       } else {
         setStatusData(prev => [payload, ...prev]);
+        recordAudit({
+          userName: currentUserProfile.name,
+          action: 'Submitted New Status',
+          targetDate: payload.date,
+          details: `Submitted status with ${payload.todayPlan.length} plan item(s).`
+        });
       }
 
       setIsDirty(false);
-      setMessage({ type: 'success', text: 'Status Saved Successfully!' });
+      showNotification('success', 'Status Saved Successfully!');
     } catch (err) {
       console.error(err);
-      setMessage({ type: 'error', text: 'Failed to save status: ' + err.message });
+      showNotification('error', 'Failed to save status: ' + err.message);
     } finally {
       setSubmitting(false);
     }
@@ -694,76 +1317,135 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
               {message.text}
             </div>
           )}
-          <datalist id="project-options">
-            {allProjects.map((projectName) => <option key={projectName} value={projectName} />)}
-          </datalist>
 
-          <div className={`space-y-4 rounded-xl p-4 border ${!isDayStartOpen ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-80' : 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-800/50'}`}>
+          <div className={`space-y-4 rounded-2xl p-6 border-2 shadow-md transition-all duration-300 card-elevation ${!isDayStartOpen ? 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 opacity-70' : 'bg-gradient-to-br from-blue-50 to-blue-50/50 dark:from-blue-900/10 dark:to-slate-900/20 border-blue-200 dark:border-blue-800/40'}`}>
             <div className="flex items-center justify-between border-b border-slate-300 dark:border-slate-600 pb-2">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 1. Day Start Plan
                 {!isDayStartOpen && <span className="text-xs bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 px-2 py-0.5 rounded flex items-center gap-1"><Lock size={10} /> Locked</span>}
               </h3>
-              {isDayStartOpen && <button type="button" onClick={() => addTask('yesterdayWork')} className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 font-medium">+ Task</button>}
+              {isDayStartOpen && <button type="button" onClick={() => addTask('yesterdayWork')} className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95"><PlusCircle size={16} /> Add Task</button>}
             </div>
 
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mt-2">Yesterday's Work</p>
             {formData.yesterdayWork.map((item, idx) => (
               <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12">
-                <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="What did you finish?" value={item.task} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
-                <input
-                  disabled={!isDayStartOpen} type="text" list="project-options" value={item.project} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'project', e.target.value)} onBlur={(e) => addCustomProject(e.target.value)}
-                  placeholder="Project" className={`w-32 ${inputBase}`} required
-                />
+                <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="What did you finish?" value={item.task} onPaste={(e) => handleTaskPaste('yesterdayWork', idx, e)} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
+                <select disabled={!isDayStartOpen} value={item.project} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
+                  <option value="" disabled>Select project</option>
+                  {projectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                </select>
+                {item.project === 'Others' && (
+                  <input
+                    disabled={!isDayStartOpen}
+                    type="text"
+                    value={item.customProject}
+                    onChange={(e) => handleTaskChange('yesterdayWork', idx, 'customProject', e.target.value)}
+                    placeholder="Specify project"
+                    className={`w-40 ${inputBase}`}
+                    required
+                  />
+                )}
+                {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
+                  <input
+                    type="text"
+                    disabled={!isDayStartOpen}
+                    placeholder="JIRA ID (e.g., ABC-123)"
+                    value={item.jiraId || ''}
+                    onChange={(e) => handleTaskChange('yesterdayWork', idx, 'jiraId', e.target.value.toUpperCase())}
+                    className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`}
+                    title="Automatically detected from task text or enter manually"
+                  />
+                )}
                 <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('yesterdayWork', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('yesterdayWork', idx, 'minutes', e.target.value)} disabled={!isDayStartOpen} />
                 <select disabled={!isDayStartOpen} value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
                   <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
                 </select>
-
-                {/* Blocked Checkbox Removed from Yesterday's Work */}
-
-                {isDayStartOpen && <button type="button" onClick={() => removeTask('yesterdayWork', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><LogOut size={18} /></button>}
+                {isDayStartOpen && <button type="button" onClick={() => removeTask('yesterdayWork', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>}
               </div>
             ))}
 
             <div className="flex justify-between items-center mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Today's Plan</p>
-              {isDayStartOpen && <button type="button" onClick={() => addTask('todayPlan')} className="text-xs text-blue-600 dark:text-blue-400 font-bold">+ Plan Item</button>}
+              {isDayStartOpen && <button type="button" onClick={() => addTask('todayPlan')} className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95"><PlusCircle size={16} /> Add Plan Item</button>}
             </div>
             {formData.todayPlan.map((item, idx) => (
               <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12">
-                <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="Planned task..." value={item.task} onChange={(e) => handleTaskChange('todayPlan', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
-                <input
-                  disabled={!isDayStartOpen} type="text" list="project-options" value={item.project || 'SMNGUI'} onChange={(e) => handleTaskChange('todayPlan', idx, 'project', e.target.value)} onBlur={(e) => addCustomProject(e.target.value)}
-                  placeholder="Project" className={`w-32 ${inputBase}`} required
-                />
+                <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="Planned task..." value={item.task} onPaste={(e) => handleTaskPaste('todayPlan', idx, e)} onChange={(e) => handleTaskChange('todayPlan', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
+                <select disabled={!isDayStartOpen} value={item.project} onChange={(e) => handleTaskChange('todayPlan', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
+                  <option value="" disabled>Select project</option>
+                  {projectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                </select>
+                {item.project === 'Others' && (
+                  <input
+                    disabled={!isDayStartOpen}
+                    type="text"
+                    value={item.customProject}
+                    onChange={(e) => handleTaskChange('todayPlan', idx, 'customProject', e.target.value)}
+                    placeholder="Specify project"
+                    className={`w-40 ${inputBase}`}
+                    required
+                  />
+                )}
+                {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
+                  <input
+                    type="text"
+                    disabled={!isDayStartOpen}
+                    placeholder="JIRA ID (e.g., ABC-123)"
+                    value={item.jiraId || ''}
+                    onChange={(e) => handleTaskChange('todayPlan', idx, 'jiraId', e.target.value.toUpperCase())}
+                    className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`}
+                    title="Automatically detected from task text or enter manually"
+                  />
+                )}
                 <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('todayPlan', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('todayPlan', idx, 'minutes', e.target.value)} disabled={!isDayStartOpen} />
                 <select disabled={!isDayStartOpen} value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('todayPlan', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
                   <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
                 </select>
-
-                {isDayStartOpen && <button type="button" onClick={() => removeTask('todayPlan', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><LogOut size={18} /></button>}
+                {isDayStartOpen && <button type="button" onClick={() => removeTask('todayPlan', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>}
               </div>
             ))}
           </div>
 
           {isUpdateMode && (
-            <div className={`space-y-4 rounded-xl p-4 border ${!isDayEndOpen ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-80' : 'bg-green-50/50 dark:bg-green-900/10 border-green-100 dark:border-green-800/50'}`}>
+            <div className={`space-y-4 rounded-2xl p-6 border-2 shadow-md transition-all duration-300 card-elevation ${!isDayEndOpen ? 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 opacity-70' : 'bg-gradient-to-br from-green-50 to-green-50/50 dark:from-green-900/10 dark:to-slate-900/20 border-green-200 dark:border-green-800/40'}`}>
               <div className="flex items-center justify-between border-b border-slate-300 dark:border-slate-600 pb-2">
                 <h3 className="text-lg font-bold text-green-900 dark:text-green-400 flex items-center gap-2">
                   2. Day End Actuals
                   {!isDayEndOpen && <span className="text-xs bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400 px-2 py-0.5 rounded flex items-center gap-1"><Lock size={10} /> Closed (Opens at 5 PM)</span>}
                 </h3>
-                {isDayEndOpen && <button type="button" onClick={() => addTask('todayActuals')} className="text-sm text-green-600 dark:text-green-400 hover:text-green-800 font-medium">+ Actual Item</button>}
+                {isDayEndOpen && <button type="button" onClick={() => addTask('todayActuals')} className="inline-flex items-center gap-2 text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium hover:bg-green-50 dark:hover:bg-green-900/20 px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95"><PlusCircle size={16} /> Add Actual Item</button>}
               </div>
 
               {formData.todayActuals.map((item, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-green-200 dark:border-green-800/50 relative pr-12">
-                  <AutoResizeTextarea disabled={!isDayEndOpen} placeholder="Actual task done" value={item.task} onChange={(e) => handleTaskChange('todayActuals', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} />
-                  <input
-                    disabled={!isDayEndOpen} type="text" list="project-options" value={item.project || 'SMNGUI'} onChange={(e) => handleTaskChange('todayActuals', idx, 'project', e.target.value)} onBlur={(e) => addCustomProject(e.target.value)}
-                    placeholder="Project" className={`w-32 ${inputBase}`}
-                  />
+                <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-4 rounded-xl border border-green-200 dark:border-green-800/50 relative pr-12 shadow-sm hover:shadow-md transition-all duration-200 hover:border-green-300 dark:hover:border-green-600">
+                  <AutoResizeTextarea disabled={!isDayEndOpen} placeholder="Actual task done" value={item.task} onPaste={(e) => handleTaskPaste('todayActuals', idx, e)} onChange={(e) => handleTaskChange('todayActuals', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} />
+                  <select disabled={!isDayEndOpen} value={item.project} onChange={(e) => handleTaskChange('todayActuals', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`}>
+                    <option value="" disabled>Select project</option>
+                    {projectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                  </select>
+                  {item.project === 'Others' && (
+                    <input
+                      disabled={!isDayEndOpen}
+                      type="text"
+                      value={item.customProject}
+                      onChange={(e) => handleTaskChange('todayActuals', idx, 'customProject', e.target.value)}
+                      placeholder="Specify project"
+                      className={`w-40 ${inputBase}`}
+                      required
+                    />
+                  )}
+                  {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
+                    <input
+                      type="text"
+                      disabled={!isDayEndOpen}
+                      placeholder="JIRA ID (e.g., ABC-123)"
+                      value={item.jiraId || ''}
+                      onChange={(e) => handleTaskChange('todayActuals', idx, 'jiraId', e.target.value.toUpperCase())}
+                      className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`}
+                      title="Automatically detected from task text or enter manually"
+                    />
+                  )}
                   <select disabled={!isDayEndOpen} value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('todayActuals', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
                     <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
                   </select>
@@ -776,8 +1458,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
                     <input type="checkbox" checked={item.isBlocked} onChange={(e) => handleTaskChange('todayActuals', idx, 'isBlocked', e.target.checked)} disabled={!isDayEndOpen} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-slate-800 w-4 h-4" />
                     Blocked
                   </label>
-
-                  {isDayEndOpen && <button type="button" onClick={() => removeTask('todayActuals', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><LogOut size={18} /></button>}
+                  {isDayEndOpen && <button type="button" onClick={() => removeTask('todayActuals', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>}
 
                   {item.isBlocked && (
                     <input disabled={!isDayEndOpen} type="text" placeholder="Explain the blocker..." value={item.blockerReason} onChange={(e) => handleTaskChange('todayActuals', idx, 'blockerReason', e.target.value)} className={`w-full mt-1 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 ${inputBase}`} required />
@@ -787,13 +1468,13 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
             </div>
           )}
 
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-end">
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-4">
             <button
               type="submit"
               disabled={submitting || (!isDayStartOpen && !isDayEndOpen)}
-              className={`px-8 py-3 rounded-lg text-white font-semibold shadow-md hover:shadow-lg transition-all ${submitting || (!isDayStartOpen && !isDayEndOpen) ? 'bg-slate-400 dark:bg-slate-600 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+              className={`px-8 py-3 rounded-xl text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 ripple-button ${submitting || (!isDayStartOpen && !isDayEndOpen) ? 'bg-slate-400 dark:bg-slate-600 cursor-not-allowed opacity-60' : 'bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 dark:from-indigo-500 dark:to-indigo-600'}`}
             >
-              {submitting ? 'Saving...' : 'Save Status'}
+              {submitting ? '⏳ Saving...' : '✓ Save Status'}
             </button>
           </div>
         </form>
@@ -803,8 +1484,8 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 }
 
 // --- VIEW 2: Scrum Dashboard ---
-function DashboardView({ data, currentSM, users, canManage, setStatusData }) {
-  const isManagerView = canManage || currentSM?.role === 'ADMIN';
+function DashboardView({ data, loggedInUser, assignedSM, users, canManage, setStatusData, recordAudit, showConfirm, showNotification }) {
+  const isManagerView = canManage;
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [generatedContent, setGeneratedContent] = useState(null);
   const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('https://default414ad49ffdc94181bd7eba81a9cdb7.7f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3af37b0ffc76482586cb2c84319d8242/triggers/manual/paths/invoke?api-version=1');
@@ -833,7 +1514,8 @@ function DashboardView({ data, currentSM, users, canManage, setStatusData }) {
   }, [dailyData]);
 
   const toggleApproval = async (docId, currentStatus) => {
-    if (!window.confirm(`Are you sure you want to ${currentStatus ? 'Unapprove' : 'Approve'} this status?`)) return;
+    const confirmed = await showConfirm(`Are you sure you want to ${currentStatus ? 'Unapprove' : 'Approve'} this status?`, currentStatus ? 'Unapprove Status' : 'Approve Status');
+    if (!confirmed) return;
 
     const recordToUpdate = data.find(r => r.id === docId);
     if (!recordToUpdate) return;
@@ -848,13 +1530,20 @@ function DashboardView({ data, currentSM, users, canManage, setStatusData }) {
       if (!res.ok) throw new Error("Server error");
 
       setStatusData(prev => prev.map(record => record.id === docId ? updatedRecord : record));
+      recordAudit({
+        userName: loggedInUser.name,
+        action: updatedRecord.approved ? 'Approved Status' : 'Unapproved Status',
+        targetDate: updatedRecord.date,
+        details: `${updatedRecord.userName} status ${updatedRecord.approved ? 'approved' : 'unapproved'} by ${loggedInUser.name}`
+      });
     } catch (err) {
-      alert("Failed to update approval status.");
+      showNotification('error', "Failed to update approval status.");
     }
   };
 
   const markAsLeave = async (user) => {
-    if (!window.confirm(`Mark ${user.name} as ON LEAVE for ${formatDate(selectedDate)}?`)) return;
+    const confirmed = await showConfirm(`Mark ${user.name} as ON LEAVE for ${formatDate(selectedDate)}?`, 'Mark On Leave');
+    if (!confirmed) return;
 
     const payload = {
       id: generateId(),
@@ -880,24 +1569,57 @@ function DashboardView({ data, currentSM, users, canManage, setStatusData }) {
       if (!res.ok) throw new Error("Server error");
 
       setStatusData(prev => [payload, ...prev]);
+      recordAudit({
+        userName: loggedInUser.name,
+        action: 'Marked as Leave',
+        targetDate: payload.date,
+        details: `${loggedInUser.name} marked ${user.name} as on leave.`
+      });
     } catch (err) {
-      alert("Failed to mark as leave.");
+      showNotification('error', "Failed to mark as leave.");
     }
   };
 
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text).then(() => alert('Copied!')).catch(err => alert('Failed to copy'));
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => showNotification('success', 'Copied!')).catch(() => fallbackCopyText(text));
+    } else {
+      fallbackCopyText(text);
+    }
+  };
+
+  const fallbackCopyText = (text) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      showNotification('success', 'Copied!');
+    } catch {
+      showNotification('error', 'Failed to copy');
+    }
+    document.body.removeChild(textarea);
   };
 
   const copyHtmlToClipboard = (elementId) => {
     const node = document.getElementById(elementId);
+    if (!node) return showNotification('error', 'Content not found');
     const range = document.createRange();
     range.selectNode(node);
-    window.getSelection().removeAllRanges();
-    window.getSelection().addRange(range);
-    document.execCommand('copy');
-    window.getSelection().removeAllRanges();
-    alert('HTML copied!');
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    try {
+      document.execCommand('copy');
+      showNotification('success', 'HTML copied!');
+    } catch {
+      showNotification('error', 'Failed to copy HTML content');
+    }
+    selection.removeAllRanges();
   };
 
   const generateReminderText = () => {
@@ -968,36 +1690,38 @@ function DashboardView({ data, currentSM, users, canManage, setStatusData }) {
   }, [data, selectedDate, users]);
 
   useEffect(() => {
-    if (!currentSM) return;
-    const now = new Date();
-    const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const todayKey = `${getTodayString()}-${hhmm}`;
-    const triggered = localStorage.getItem(`streetman_reminder_${todayKey}`);
+    if (!loggedInUser) return;
+    const interval = setInterval(() => {
+      const now = new Date();
+      const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const todayKey = `${getTodayString()}-${hhmm}`;
+      const triggered = localStorage.getItem(`streetman_reminder_${todayKey}`);
 
-    if ((hhmm === '11:30' || hhmm === '18:30') && !triggered && missingUsers.length > 0) {
-      alert(`Reminder schedule (${hhmm}) triggered for ${missingUsers.length} pending update(s).`);
-      localStorage.setItem(`streetman_reminder_${todayKey}`, '1');
-      navigator.clipboard.writeText(generateReminderText()).catch(() => { });
-      const recipients = teamsReminderConfig.recipients
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean);
+      if ((hhmm === '11:30' || hhmm === '18:30') && !triggered && missingUsers.length > 0) {
+        localStorage.setItem(`streetman_reminder_${todayKey}`, '1');
+        copyToClipboard(generateReminderText());
+        const recipients = teamsReminderConfig.recipients
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean);
 
-      if (recipients.length > 0) {
-        const subject = encodeURIComponent(`Scrum Reminder - ${formatDate(selectedDate)}`);
-        const body = encodeURIComponent(`⏰ Scrum Reminder (${hhmm})\n\n${generateReminderText()}`);
-        const mailtoUrl = `mailto:${encodeURIComponent(recipients.join(','))}?subject=${subject}&body=${body}`;
-        window.open(mailtoUrl, '_blank');
-        alert(`Reminder email draft opened for ${recipients.length} recipient(s).`);
-      } else {
-        alert(`Reminder schedule (${hhmm}) triggered for ${missingUsers.length} pending update(s). Configure recipient mail IDs to draft emails.`);
+        if (recipients.length > 0) {
+          const subject = encodeURIComponent(`Scrum Reminder - ${formatDate(selectedDate)}`);
+          const body = encodeURIComponent(`⏰ Scrum Reminder (${hhmm})\n\n${generateReminderText()}`);
+          const mailtoUrl = `mailto:${encodeURIComponent(recipients.join(','))}?subject=${subject}&body=${body}`;
+          window.open(mailtoUrl, '_blank');
+          showNotification('success', `Reminder email draft opened for ${recipients.length} recipient(s).`);
+        } else {
+          showNotification('info', `Reminder schedule (${hhmm}) triggered for ${missingUsers.length} pending update(s). Configure recipient mail IDs to draft emails.`);
+        }
       }
-    }
-  }, [currentSM, missingUsers, teamsReminderConfig, selectedDate]);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [loggedInUser, missingUsers, teamsReminderConfig, selectedDate]);
 
   const sendTeamsWebhook = async (type) => {
     if (!teamsWebhookUrl.trim()) {
-      alert('Add Teams incoming webhook URL first.');
+      showNotification('error', 'Add Teams incoming webhook URL first.');
       return;
     }
 
@@ -1010,100 +1734,226 @@ function DashboardView({ data, currentSM, users, canManage, setStatusData }) {
       });
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      alert('Posted to Microsoft Teams successfully.');
+      showNotification('success', 'Posted to Microsoft Teams successfully.');
     } catch (error) {
-      alert(`Failed to post to Teams webhook: ${error.message}`);
+      showNotification('error', `Failed to post to Teams webhook: ${error.message}`);
     }
   };
 
   const downloadPythonScript = () => {
-    let htmlTable = `<table border="1" style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
-        <thead style="background-color: #1e3a8a; color: white;">
-            <tr>
-                <th style="padding: 8px;">Member</th>
-                <th style="padding: 8px;">Yesterday's Work</th>
-                <th style="padding: 8px;">Today's Plan</th>
-            </tr>
-        </thead>
-        <tbody>`;
+    const reportDate = selectedDate || getTodayString();
+    const reportDateLabel = formatDate(reportDate);
+    const htmlTable = buildOutlookEmailHtml(reportDate, assignedSM, dailyData);
 
-    dailyData.forEach((row, idx) => {
-      const bg = idx % 2 === 0 ? '#ffffff' : '#f3f4f6';
-      if (row.status === 'LEAVE') {
-        htmlTable += `<tr style="background-color: ${bg};">
-                <td style="padding: 8px; vertical-align: top; border: 1px solid #ddd;"><strong>${row.userName}</strong></td>
-                <td colspan="2" style="padding: 8px; vertical-align: middle; text-align: center; background-color: #FFFFE0; color: #000; font-weight: bold; border: 1px solid #ddd;">ON LEAVE</td>
-              </tr>`;
-      } else {
-        const yesterday = row.yesterdayWork.map(t => `<li>${t.task}</li>`).join('');
-        const today = row.todayPlan.map(t => `<li>${t.task}</li>`).join('');
+    const scriptContent = `#!/usr/bin/env python3
+"""
+StreetMan Scrum Automation - Outlook Email Sender
 
-        htmlTable += `<tr style="background-color: ${bg};">
-                <td style="padding: 8px; vertical-align: top; border: 1px solid #ddd;"><strong>${row.userName}</strong></td>
-                <td style="padding: 8px; vertical-align: top; border: 1px solid #ddd;"><ul>${yesterday}</ul></td>
-                <td style="padding: 8px; vertical-align: top; border: 1px solid #ddd;"><ul>${today}</ul></td>
-              </tr>`;
-      }
-    });
-    htmlTable += `</tbody></table>`;
+This script sends HTML emails via Microsoft Outlook Desktop application.
+It includes comprehensive prerequisite checks to ensure the system is properly configured.
 
-    const scriptContent = `import sys
-import subprocess
-
-def ensure_pywin32():
-    try:
-        import win32com.client  # noqa
-    except ImportError:
-        print("📦 pywin32 not found. Installing...")
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install", "pywin32"
-        ])
-        print("✅ pywin32 installed successfully")
-
-ensure_pywin32()
-import win32com.client as win32
-
-# --- CONFIG ---
-TO_EMAILS = "${emailConfig.to}"
-SUBJECT = "StreetMan Scrum Status - ${formatDate(selectedDate)}"
-
-# --- CONTENT ---
-html_content = """
-<p style="font-family: Arial, sans-serif;">Hi Team,</p>
-<p style="font-family: Arial, sans-serif;">Please find the scrum status for today.</p>
-${htmlTable}
-<p style="font-family: Arial, sans-serif;">Thanks,<br/>${currentSM.name}</p>
+Generated on: ${new Date().toISOString()}
+Report Date: ${reportDateLabel}
 """
 
-# --- SEND VIA OUTLOOK DESKTOP ---
-try:
-    print("🔄 Connecting to Outlook...")
-    outlook = win32.Dispatch('outlook.application')
-    mail = outlook.CreateItem(0) # 0 = olMailItem
-    
-    mail.To = TO_EMAILS
-    mail.Subject = SUBJECT
-    mail.HTMLBody = html_content
-    
-    # mail.Display() # Uncomment if you want to preview before sending
-    mail.Send()
-    
-    print(f"✅ Email sent successfully to {TO_EMAILS} via Outlook Desktop!")
+import sys
+import platform
+import subprocess
+import os
 
-except Exception as e:
-    print(f"❌ Error sending email: {e}")
-    print("👉 Note: Ensure Microsoft Outlook is installed and running.")
-    print("👉 Try running: pip install pywin32")
+
+def check_python_version():
+    """Check if Python version is 3.6 or higher."""
+    if sys.version_info < (3, 6):
+        print(f"❌ ERROR: Python {sys.version_info.major}.{sys.version_info.minor} is not supported.")
+        print("   Required: Python 3.6 or higher")
+        print(f"   Current: Python {sys.version}")
+        return False
+    print(f"✅ Python version: {sys.version.split()[0]}")
+    return True
+
+
+def check_operating_system():
+    """Check if running on Windows (required for Outlook integration)."""
+    if platform.system() != 'Windows':
+        print(f"❌ ERROR: This script requires Windows OS for Outlook integration.")
+        print(f"   Current OS: {platform.system()}")
+        return False
+    print(f"✅ Operating System: {platform.system()} {platform.release()}")
+    return True
+
+
+def check_outlook_installation():
+    """Check if Microsoft Outlook is installed."""
+    try:
+        # Try to find Outlook executable
+        outlook_paths = [
+            r"C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
+            r"C:\\Program Files (x86)\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
+            r"C:\\Program Files\\Microsoft Office\\Office16\\OUTLOOK.EXE",
+            r"C:\\Program Files (x86)\\Microsoft Office\\Office16\\OUTLOOK.EXE",
+            r"C:\\Program Files\\Microsoft Office\\Office15\\OUTLOOK.EXE",
+            r"C:\\Program Files (x86)\\Microsoft Office\\Office15\\OUTLOOK.EXE",
+        ]
+
+        outlook_found = False
+        for path in outlook_paths:
+            if os.path.exists(path):
+                print(f"✅ Microsoft Outlook found at: {path}")
+                outlook_found = True
+                break
+
+        if not outlook_found:
+            # Try to check via registry or other methods
+            try:
+                result = subprocess.run(['reg', 'query', r'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\OUTLOOK.EXE'],
+                                      capture_output=True, text=True, check=False)
+                if result.returncode == 0:
+                    print("✅ Microsoft Outlook found in registry")
+                    outlook_found = True
+            except:
+                pass
+
+        if not outlook_found:
+            print("❌ ERROR: Microsoft Outlook is not installed or not found in standard locations.")
+            print("   Please install Microsoft Office with Outlook.")
+            return False
+
+        return True
+
+    except Exception as e:
+        print(f"❌ ERROR: Failed to check Outlook installation: {e}")
+        return False
+
+
+def check_pywin32():
+    """Check if pywin32 is installed and install if missing."""
+    try:
+        import win32com.client
+        print("✅ pywin32 module found")
+        return True
+    except ImportError:
+        print("❌ pywin32 module is not installed.")
+        print("📦 Installing pywin32...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "pywin32"])
+            print("✅ pywin32 installed successfully")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"❌ ERROR: Failed to install pywin32: {e}")
+            print("   Try manual installation: pip install pywin32")
+            return False
+
+
+def check_outlook_running():
+    """Check if Outlook is running (optional but recommended)."""
+    try:
+        import win32com.client
+        outlook = win32com.client.Dispatch('Outlook.Application')
+        # Try to access a property to see if Outlook responds
+        version = outlook.Version
+        print(f"✅ Outlook is running (Version: {version})")
+        return True
+    except Exception as e:
+        print("⚠️  WARNING: Outlook may not be running or accessible.")
+        print("   It's recommended to have Outlook open for better reliability.")
+        print("   Error details:", str(e))
+        return True  # Don't fail the check, just warn
+
+
+def run_prerequisite_checks():
+    """Run all prerequisite checks."""
+    print("🔍 Checking prerequisites for StreetMan Scrum Outlook Email Sender...")
+    print("=" * 70)
+
+    checks = [
+        check_python_version,
+        check_operating_system,
+        check_pywin32,
+        check_outlook_installation,
+        check_outlook_running,
+    ]
+
+    all_passed = True
+    for check in checks:
+        if not check():
+            all_passed = False
+        print()
+
+    if not all_passed:
+        print("❌ Some prerequisites are not met. Please fix the issues above and try again.")
+        sys.exit(1)
+
+    print("✅ All prerequisites passed! Ready to send emails via Outlook.")
+    print("=" * 70)
+    return True
+
+
+def send_outlook_email(to_emails, subject, html_content):
+    """Send email via Outlook."""
+    try:
+        import win32com.client
+
+        print("🔄 Connecting to Outlook...")
+        outlook = win32com.client.Dispatch('Outlook.Application')
+        mail = outlook.CreateItem(0)  # 0 = olMailItem
+
+        mail.To = to_emails
+        mail.Subject = subject
+        mail.HTMLBody = html_content
+
+        # mail.Display()  # Uncomment if you want to preview before sending
+        mail.Send()
+
+        print(f"✅ Email sent successfully to {to_emails} via Outlook Desktop!")
+        return True
+
+    except Exception as e:
+        print(f"❌ Error sending email: {e}")
+        print("👉 Note: Ensure Microsoft Outlook is installed and running.")
+        print("👉 Try running: pip install pywin32")
+        return False
+
+
+def main():
+    """Main function."""
+    # Run prerequisite checks first
+    run_prerequisite_checks()
+
+    # --- CONFIG ---
+    TO_EMAILS = "${emailConfig.to}"
+    SUBJECT = "StreetMan Scrum Status - ${reportDateLabel}"
+
+    # --- CONTENT ---
+    html_content = """${htmlTable}"""
+
+    # Send email
+    if send_outlook_email(TO_EMAILS, SUBJECT, html_content):
+        print("\\n🎉 StreetMan Scrum Status email sent successfully!")
+        print(f"📅 Report Date: ${reportDateLabel}")
+        print(f"📧 Recipients: ${emailConfig.to}")
+    else:
+        print("\\n❌ Failed to send StreetMan Scrum Status email.")
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()
 `;
 
     const blob = new Blob([scriptContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `send_status_${selectedDate}.py`;
+    a.download = `send_status_${reportDate}_${Date.now()}.py`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadOutlookScript = async () => {
+    downloadPythonScript();
   };
 
   const generateTeamsText = (type) => {
@@ -1117,9 +1967,16 @@ except Exception as e:
       if (userEntry.status === 'LEAVE') return;
 
       let tasks = type === 'start' ? (userEntry.todayPlan || []) : (userEntry.todayActuals?.length > 0 ? userEntry.todayActuals : []);
-      if (tasks.length === 0) content += "  - No tasks recorded\n";
-      else tasks.forEach((t, i) => content += `${i + 1}. ${t.task} - ${t.project || 'General'} - ${t.time || t.actualTime || ''} - ${t.priority || 'Medium'}${t.blockerReason ? ` - Blocker: ${t.blockerReason}` : ''}${type === 'end' ? ` - ${t.status || 'Done'}` : ''}\n`);
-      content += '\n';
+      if (tasks.length === 0) {
+        content += `- ${userEntry.userName}: No tasks recorded\n\n`;
+      } else {
+        content += `- ${userEntry.userName}:\n`;
+        tasks.forEach((t) => {
+          const duration = t.actualTime || t.time || '';
+          content += `  - ${t.task}${t.project ? ` (${t.project})` : ''}${duration ? ` – ${duration}` : ''}${t.blockerReason ? ` (Blocker: ${t.blockerReason})` : ''}${type === 'end' && t.status ? ` (${t.status})` : ''}\n`;
+        });
+        content += '\n';
+      }
     });
     return content;
   };
@@ -1132,7 +1989,7 @@ except Exception as e:
             <LayoutDashboard className="text-indigo-600" /> Scrum Dashboard
           </h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Action Center for Scrum Master <strong>{currentSM.name}</strong>.
+            Action Center for Scrum Master <strong>{assignedSM?.name || 'Assigned User'}</strong>.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1171,6 +2028,64 @@ except Exception as e:
           </div>
         )}
       </div>
+
+      {isManagerView && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Daily Status Card */}
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-900/10 p-4 rounded-xl border border-blue-200 dark:border-blue-700 shadow-sm">
+            <p className="text-xs text-blue-700 dark:text-blue-300 font-semibold uppercase tracking-wide">Daily Submissions</p>
+            <div className="flex items-center gap-3 mt-3">
+              <div className="text-3xl font-bold text-blue-700 dark:text-blue-400">{dailyData.filter(d => d.status !== 'LEAVE').length}/{users.filter(u => u.role !== 'ADMIN').length}</div>
+              <div className="text-right">
+                <p className="text-xs text-blue-600 dark:text-blue-300">
+                  {((dailyData.filter(d => d.status !== 'LEAVE').length / users.filter(u => u.role !== 'ADMIN').length) * 100).toFixed(0)}% today
+                </p>
+                <p className="text-xs text-blue-500 dark:text-blue-400">{dailyData.filter(d => d.status === 'LEAVE').length} on leave</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Approval Status */}
+          <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-900/10 p-4 rounded-xl border border-green-200 dark:border-green-700 shadow-sm">
+            <p className="text-xs text-green-700 dark:text-green-300 font-semibold uppercase tracking-wide">Approved Today</p>
+            <div className="flex items-center gap-3 mt-3">
+              <div className="text-3xl font-bold text-green-700 dark:text-green-400">{dailyData.filter(d => d.approved && d.status !== 'LEAVE').length}</div>
+              <div className="text-right">
+                <p className="text-xs text-green-600 dark:text-green-300">Approved</p>
+                <p className="text-xs text-green-500 dark:text-green-400">{dailyData.filter(d => !d.approved && d.status !== 'LEAVE').length} pending</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tasks Submitted */}
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-900/10 p-4 rounded-xl border border-orange-200 dark:border-orange-700 shadow-sm">
+            <p className="text-xs text-orange-700 dark:text-orange-300 font-semibold uppercase tracking-wide">Tasks Captured</p>
+            <div className="flex items-center gap-3 mt-3">
+              <div className="text-3xl font-bold text-orange-700 dark:text-orange-400">
+                {dailyData.reduce((sum, d) => sum + ((d.todayActuals || []).length || 0), 0)}
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-orange-600 dark:text-orange-300">Total actual tasks</p>
+                <p className="text-xs text-orange-500 dark:text-orange-400">Day end entries</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Blockers */}
+          <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-900/10 p-4 rounded-xl border border-red-200 dark:border-red-700 shadow-sm">
+            <p className="text-xs text-red-700 dark:text-red-300 font-semibold uppercase tracking-wide">Active Blockers</p>
+            <div className="flex items-center gap-3 mt-3">
+              <div className="text-3xl font-bold text-red-700 dark:text-red-400">
+                {dailyData.reduce((sum, d) => sum + ((d.todayActuals || []).filter(t => t.status === 'Blocked').length || 0), 0)}
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-red-600 dark:text-red-300">Blocked tasks</p>
+                <p className="text-xs text-red-500 dark:text-red-400">Today</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isManagerView && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1329,7 +2244,7 @@ except Exception as e:
                 {generatedContent === 'email' ? 'Email & Python Automation' :
                   generatedContent === 'reminders' ? 'Send Reminders' : 'Teams Post'}
               </h3>
-              <button onClick={() => setGeneratedContent(null)} className="text-slate-500 hover:text-slate-800 dark:hover:text-white"><LogOut size={20} /></button>
+              <button onClick={() => setGeneratedContent(null)} className="text-slate-500 hover:text-slate-800 dark:hover:text-white"><X size={20} /></button>
             </div>
 
             <div className="p-6 overflow-y-auto bg-slate-100 dark:bg-slate-900 flex-1">
@@ -1365,48 +2280,103 @@ except Exception as e:
                 <div className="space-y-6">
                   <div className="bg-white dark:bg-slate-800 p-6 rounded shadow border-l-4 border-green-500">
                     <h4 className="font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
-                      <Download size={18} className="text-green-600 dark:text-green-400" /> Send via Python Script (Outlook)
+                      <Download size={18} className="text-green-600 dark:text-green-400" /> Download Python Script (Outlook)
                     </h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Downloads a script that uses your local Outlook Desktop app to send the report.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Download a Python script that sends the report using local Outlook Desktop when executed.</p>
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <input type="text" placeholder="Your Email" className={inputBase} value={emailConfig.address} onChange={e => setEmailConfig({ ...emailConfig, address: e.target.value })} />
                       <input type="text" placeholder="Recipient Emails (comma separated)" className={`col-span-2 ${inputBase}`} value={emailConfig.to} onChange={e => setEmailConfig({ ...emailConfig, to: e.target.value })} />
                     </div>
-                    <button onClick={downloadPythonScript} className="w-full py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 text-sm">Download .py Script</button>
+                    <div className="space-y-3">
+                      <button onClick={downloadOutlookScript} className="w-full py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700 text-sm">Download .py Script</button>
+                    </div>
                   </div>
 
                   <div className="bg-white dark:bg-slate-800 p-6 rounded shadow">
                     <div className="flex justify-between items-center mb-4">
-                      <h4 className="font-bold text-slate-700 dark:text-slate-200">HTML Preview</h4>
-                      <button onClick={() => copyHtmlToClipboard('email-template')} className="text-sm text-blue-600 dark:text-blue-400 hover:underline">Copy Content</button>
+                      <h4 className="font-bold text-slate-700 dark:text-slate-200">Email Preview</h4>
+                      <button onClick={() => copyHtmlToClipboard('email-template')} className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-semibold">📋 Copy HTML</button>
                     </div>
-                    <div id="email-template" className="font-sans border dark:border-slate-600 p-4 bg-slate-50 dark:bg-slate-900 text-sm overflow-auto max-h-64 text-slate-800 dark:text-slate-200">
-                      <p>Hi Team,</p>
-                      <p>Please find the scrum status for today.</p>
-                      <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                        <thead><tr style={{ backgroundColor: '#1e3a8a', color: 'white' }}><th className="p-2 text-left border dark:border-slate-600">Member</th><th className="p-2 text-left border dark:border-slate-600">Yesterday</th><th className="p-2 text-left border dark:border-slate-600">Today</th></tr></thead>
-                        <tbody>
-                          {dailyData.map((row, idx) => {
-                            const bg = idx % 2 === 0 ? 'transparent' : 'rgba(148, 163, 184, 0.1)';
-                            if (row.status === 'LEAVE') {
-                              return (
-                                <tr key={idx} style={{ backgroundColor: bg }}>
-                                  <td className="p-2 border dark:border-slate-600 font-bold">{row.userName}</td>
-                                  <td colSpan="2" style={{ padding: '8px', textAlign: 'center', backgroundColor: 'rgba(253, 230, 138, 0.2)', color: '#B45309', fontWeight: 'bold', border: '1px solid #e5e7eb' }}>ON LEAVE</td>
-                                </tr>
-                              );
-                            }
-                            return (
-                              <tr key={idx} style={{ backgroundColor: bg }}>
-                                <td className="p-2 border dark:border-slate-600 font-bold">{row.userName}</td>
-                                <td className="p-2 border dark:border-slate-600"><ul>{(row.yesterdayWork || []).filter(t => t.task?.trim()).map(t => <li>{t.task}</li>)}</ul></td>
-                                <td className="p-2 border dark:border-slate-600"><ul>{(row.todayPlan || []).filter(t => t.task?.trim()).map(t => <li>{t.task}</li>)}</ul></td>
+                    <div id="email-template" className="border dark:border-slate-600 overflow-auto max-h-96 text-slate-800 dark:text-slate-200" style={{ backgroundColor: '#f8fafc' }}>
+                      <div style={{ maxWidth: '900px', margin: '0 auto', fontFamily: "'Segoe UI', Arial, sans-serif", lineHeight: '1.6', color: '#333' }}>
+                        {/* Header */}
+                        <div style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', padding: '30px 20px', textAlign: 'center', borderRadius: '8px 8px 0 0' }}>
+                          <h1 style={{ margin: 0, color: 'white', fontSize: '28px', fontWeight: 700 }}>StreetMan Scrum Status</h1>
+                          <p style={{ margin: '8px 0 0 0', color: '#e0e7ff', fontSize: '14px' }}>Daily Standup Report</p>
+                        </div>
+
+                        {/* Date & Info */}
+                        <div style={{ backgroundColor: '#f0f4ff', padding: '16px 20px', borderLeft: '4px solid #3b82f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <p style={{ margin: 0, color: '#666', fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Report Date</p>
+                            <p style={{ margin: '4px 0 0 0', color: '#1e3a8a', fontSize: '18px', fontWeight: 700 }}>{formatDate(selectedDate)}</p>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ margin: 0, color: '#666', fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Scrum Master</p>
+                            <p style={{ margin: '4px 0 0 0', color: '#1e3a8a', fontSize: '18px', fontWeight: 700 }}>{assignedSM?.name || 'N/A'}</p>
+                          </div>
+                        </div>
+
+                        {/* Content */}
+                        <div style={{ padding: '24px 20px', background: 'white' }}>
+                          <p style={{ margin: '0 0 20px 0', color: '#555', fontSize: '15px' }}>Hi Team,</p>
+                          <p style={{ margin: '0 0 24px 0', color: '#555', fontSize: '15px' }}>Please find the scrum status summary below.</p>
+
+                          {/* Data Table */}
+                          <table style={{ width: '100%', borderCollapse: 'collapse', margin: '20px 0', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                            <thead>
+                              <tr style={{ background: 'linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%)', color: 'white' }}>
+                                <th style={{ padding: '14px 12px', textAlign: 'left', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid #1e3a8a', letterSpacing: '0.5px' }}>Team Member</th>
+                                <th style={{ padding: '14px 12px', textAlign: 'left', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid #1e3a8a', letterSpacing: '0.5px' }}>Yesterday's Work</th>
+                                <th style={{ padding: '14px 12px', textAlign: 'left', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid #1e3a8a', letterSpacing: '0.5px' }}>Today's Plan</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                      <p>Thanks,<br />{currentSM.name}</p>
+                            </thead>
+                            <tbody>
+                              {dailyData.map((row, idx) => {
+                                const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafb';
+                                const borderColor = idx === dailyData.length - 1 ? '2px solid #e5e7eb' : '1px solid #e5e7eb';
+                                if (row.status === 'LEAVE') {
+                                  return (
+                                    <tr key={idx} style={{ backgroundColor: bg }}>
+                                      <td style={{ padding: '14px 12px', borderBottom: borderColor, fontWeight: 600, color: '#1e3a8a' }}>{row.userName}</td>
+                                      <td style={{ padding: '14px 12px', borderBottom: borderColor, textAlign: 'center', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', color: '#92400e', fontWeight: 600 }} colSpan="2">🏖️ ON LEAVE</td>
+                                    </tr>
+                                  );
+                                }
+                                const yesterday = (row.yesterdayWork || []).filter(t => t.task?.trim()).length > 0
+                                  ? (row.yesterdayWork || []).filter(t => t.task?.trim()).map((t, i) => <li key={i} style={{ margin: '4px 0', color: '#333', fontSize: '14px' }}>{t.task}</li>)
+                                  : <li style={{ margin: '4px 0', color: '#999', fontSize: '14px', fontStyle: 'italic' }}>No tasks</li>;
+                                const today = (row.todayPlan || []).filter(t => t.task?.trim()).length > 0
+                                  ? (row.todayPlan || []).filter(t => t.task?.trim()).map((t, i) => <li key={i} style={{ margin: '4px 0', color: '#333', fontSize: '14px' }}>{t.task}</li>)
+                                  : <li style={{ margin: '4px 0', color: '#999', fontSize: '14px', fontStyle: 'italic' }}>No tasks</li>;
+                                return (
+                                  <tr key={idx} style={{ backgroundColor: bg }}>
+                                    <td style={{ padding: '14px 12px', borderBottom: borderColor, fontWeight: 600, color: '#1e3a8a' }}>{row.userName}</td>
+                                    <td style={{ padding: '14px 12px', borderBottom: borderColor }}><ul style={{ margin: 0, paddingLeft: '20px' }}>{yesterday}</ul></td>
+                                    <td style={{ padding: '14px 12px', borderBottom: borderColor }}><ul style={{ margin: 0, paddingLeft: '20px' }}>{today}</ul></td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Summary */}
+                        <div style={{ padding: '16px 20px', backgroundColor: '#f0f4ff', borderTop: '1px solid #e5e7eb' }}>
+                          <p style={{ margin: 0, color: '#1e3a8a', fontSize: '13px', fontWeight: 600 }}>
+                            ✅ Total Members: <strong>{dailyData.length}</strong> | 🏖️ On Leave: <strong>{dailyData.filter(d => d.status === 'LEAVE').length}</strong>
+                          </p>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{ background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)', padding: '24px 20px', textAlign: 'center', borderRadius: '0 0 8px 8px', color: 'white' }}>
+                          <p style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>{assignedSM?.name || 'StreetMan Scrum Automation'}</p>
+                          <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#d1d5db' }}>Automated daily standup reporting system</p>
+                          <p style={{ margin: 0, fontSize: '11px', color: '#9ca3af', borderTop: '1px solid #374151', paddingTop: '12px' }}>
+                            Generated on {new Date().toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1453,220 +2423,639 @@ except Exception as e:
 }
 
 // --- VIEW 3: Reports ---
-function ReportsView({ data }) {
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+function ReportsView({ data, showNotification }) {
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [isExporting, setIsExporting] = useState(false);
+  const styleHeader = (cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = fullBorder();
+  };
+
+  const styleSubHeader = (cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3B82F6' } };
+    cell.alignment = { horizontal: 'center' };
+    cell.border = fullBorder();
+  };
+
+  const fullBorder = () => ({
+    top: { style: 'thin' },
+    left: { style: 'thin' },
+    bottom: { style: 'thin' },
+    right: { style: 'thin' }
+  });
 
   const filteredData = useMemo(() => {
-    return data.filter(d => d.date.startsWith(month)).filter((doc) => {
-      if (doc.status === 'LEAVE') return true;
-      const hasYesterday = (doc.yesterdayWork || []).some((task) => (task.task || '').trim());
-      const hasPlan = (doc.todayPlan || []).some((task) => (task.task || '').trim());
-      const hasActual = (doc.todayActuals || []).some((task) => (task.task || '').trim());
-      return hasYesterday || hasPlan || hasActual;
-    });
+    return data
+      .filter(d => d.date.startsWith(month))
+      .filter((doc) => {
+        if (doc.status === 'LEAVE') return true;
+        return (doc.todayActuals || []).some(t => (t.task || '').trim());
+      });
   }, [data, month]);
 
+  const summaryStats = useMemo(() => {
+    const members = [...new Set(filteredData.map(d => d.userName))];
+    const totalEntries = filteredData.length;
+    const leaveEntries = filteredData.filter(d => d.status === 'LEAVE').length;
+    const workingEntries = filteredData.filter(d => d.status !== 'LEAVE').length;
+    return { members: members.length, totalEntries, workingEntries, leaveEntries };
+  }, [filteredData]);
+
+  const chartData = useMemo(() => {
+    const members = [...new Set(filteredData.map(d => d.userName))];
+    return members.map(memberName => {
+      const memberData = filteredData.filter(d => d.userName === memberName && d.status !== 'LEAVE');
+      let totalHours = 0;
+      memberData.forEach(doc => {
+        const tasks = doc.todayActuals || [];
+        tasks.forEach(t => {
+          totalHours += durationToHours(t.actualTime || t.time);
+        });
+      });
+      return {
+        name: memberName,
+        hours: Number(totalHours.toFixed(2))
+      };
+    }).filter(entry => entry.hours > 0)
+      .sort((a, b) => b.hours - a.hours);
+  }, [filteredData]);
+
   const downloadExcel = async () => {
-    if (filteredData.length === 0) {
-      alert("No valid data found for selected month.");
-      return;
-    }
-    if (!window.ExcelJS) {
-      alert("Excel export library is loading. Please wait a moment and try again.");
+    if (!filteredData.length) {
+      showNotification('error', "No valid data found for selected month.");
       return;
     }
 
+    setIsExporting(true);
+    try {
+      await generateExcelReport(filteredData, month);
+      showNotification('success', "Excel report downloaded successfully!");
+    } catch (error) {
+      console.error('Export error:', error);
+      showNotification('error', "Failed to generate Excel report. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const generateExcelReport = async (data, month) => {
     const workbook = new window.ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('StreetMan Scrum Report');
+    const members = [...new Set(data.map(d => d.userName))];
 
-    sheet.columns = [
-      { header: 'Date', key: 'date', width: 15 },
-      { header: 'Employee Name', key: 'name', width: 25 },
-      { header: "Yesterday's Work", key: 'yesterday_summary', width: 45 },
-      { header: "Today's Plan", key: 'plan_summary', width: 45 },
-      { header: 'Hardware Tasks', key: 'hw_task', width: 40 },
-      { header: 'Duration', key: 'hw_time', width: 10 },
-      { header: 'SMNGUI Tasks', key: 'gui_task', width: 40 },
-      { header: 'Duration', key: 'gui_time', width: 10 },
-      { header: 'SM Core Tasks', key: 'core_task', width: 40 },
-      { header: 'Duration', key: 'core_time', width: 10 },
-    ];
+    // Create Summary Sheet
+    createSummarySheet(workbook, members, data);
 
-    const headerRow = sheet.getRow(1);
-    for (let i = 1; i <= 10; i++) {
-      const cell = headerRow.getCell(i);
-      cell.value = sheet.columns[i - 1].header;
-      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-      cell.alignment = { vertical: 'middle', horizontal: 'center' };
-      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-    }
-
-    filteredData.forEach(doc => {
-      const buckets = {
-        'Hardware': { tasks: [], minutes: 0 },
-        'SMNGUI': { tasks: [], minutes: 0 },
-        'SM Core': { tasks: [], minutes: 0 }
-      };
-
-      if (doc.status !== 'LEAVE') {
-        (doc.yesterdayWork || []).forEach(task => {
-          if (!task.task || !task.task.trim()) return;
-          const category = PROJECT_CATEGORIES[task.project] || 'SM Core';
-          buckets[category].tasks.push(task.task);
-          buckets[category].minutes += parseDurationToMinutes(task.time);
-        });
-      }
-
-      const formatTasks = (tasks) => tasks.length > 0 ? tasks.map(t => `• ${t}`).join('\n') : '-';
-      const safeTime = (minutes) => minutes > 0 ? formatMinutesToDuration(minutes) : '-';
-
-      const rowValues = {
-        date: doc.date,
-        name: doc.userName,
-        yesterday_summary: formatTasks((doc.yesterdayWork || []).filter(t => t.task?.trim()).map(t => `${t.task} (${t.time || '-'})`)),
-        plan_summary: formatTasks((doc.todayPlan || []).filter(t => t.task?.trim()).map(t => `${t.task} (${t.time || '-'})`)),
-        hw_task: formatTasks(buckets['Hardware'].tasks),
-        hw_time: safeTime(buckets['Hardware'].minutes),
-        gui_task: formatTasks(buckets['SMNGUI'].tasks),
-        gui_time: safeTime(buckets['SMNGUI'].minutes),
-        core_task: formatTasks(buckets['SM Core'].tasks),
-        core_time: safeTime(buckets['SM Core'].minutes)
-      };
-
-      const row = sheet.addRow(Object.values(rowValues));
-
-      if (doc.status === 'LEAVE') {
-        sheet.mergeCells(row.number, 3, row.number, 10);
-        const cell = sheet.getCell(row.number, 3);
-        cell.value = "ON LEAVE";
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
-        cell.font = { color: { argb: 'FF000000' }, bold: true };
-        for (let i = 1; i <= 10; i++) {
-          const c = row.getCell(i);
-          c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-          if (i >= 3) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
-        }
-      } else {
-        [3, 4, 5, 7, 9].forEach(colIdx => {
-          sheet.getCell(row.number, colIdx).alignment = { wrapText: true, vertical: 'top' };
-        });
-        [6, 8, 10].forEach(colIdx => {
-          sheet.getCell(row.number, colIdx).alignment = { horizontal: 'center', vertical: 'top' };
-        });
-
-        row.eachCell((cell) => {
-          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        });
-      }
+    // Create Member Detail Sheets
+    members.forEach(memberName => {
+      createMemberSheet(workbook, memberName, data.filter(d => d.userName === memberName), month);
     });
 
+    // Download the file
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `StreetMan_Report_${month}.xlsx`;
-    anchor.click();
-    window.URL.revokeObjectURL(url);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `StreetMan_Report_${month}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const createSummarySheet = (workbook, members, data) => {
+    const summarySheet = workbook.addWorksheet("Summary");
+
+    summarySheet.columns = [
+      { header: "Employee", key: "name", width: 25, hidden: false },
+      { header: "Working Days", key: "workingDays", width: 15, hidden: false },
+      { header: "Leave Days", key: "leaveDays", width: 12, hidden: false },
+      { header: "Weekend Days", key: "weekendDays", width: 15, hidden: false },
+      { header: "Total Hours", key: "totalHours", width: 15, hidden: false },
+      { header: "Avg Hours/Day", key: "avgHours", width: 18, hidden: false }
+    ];
+
+    const headerRow = summarySheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    headerRow.alignment = { horizontal: 'center' };
+
+    members.forEach(memberName => {
+      const memberRows = data.filter(d => d.userName === memberName);
+
+      let workingDays = 0;
+      let leaveDays = 0;
+      let weekendDays = 0;
+      let totalHours = 0;
+
+      memberRows.forEach(doc => {
+        const date = new Date(doc.date);
+        const isWeekend = [0, 6].includes(date.getDay());
+
+        if (isWeekend) {
+          weekendDays++;
+          return;
+        }
+        if (doc.status === 'LEAVE') {
+          leaveDays++;
+          return;
+        }
+
+        workingDays++;
+
+        const tasks = [
+          ...(doc.yesterdayWork || []),
+          ...(doc.todayActuals || [])
+        ];
+
+        tasks.forEach(t => {
+          totalHours += durationToHours(t.actualTime || t.time);
+        });
+      });
+
+      const avgHours = workingDays ? totalHours / workingDays : 0;
+
+      summarySheet.addRow({
+        name: memberName,
+        workingDays,
+        leaveDays,
+        weekendDays,
+        totalHours: Number(totalHours.toFixed(2)),
+        avgHours: Number(avgHours.toFixed(2))
+      });
+    });
+
+    // TOTAL ROW
+    const lastRow = summarySheet.rowCount + 1;
+    summarySheet.addRow({
+      name: "TOTAL",
+      workingDays: { formula: `SUM(B2:B${lastRow - 1})` },
+      leaveDays: { formula: `SUM(C2:C${lastRow - 1})` },
+      weekendDays: { formula: `SUM(D2:D${lastRow - 1})` },
+      totalHours: { formula: `SUM(E2:E${lastRow - 1})` },
+      avgHours: { formula: `AVERAGE(F2:F${lastRow - 1})` }
+    });
+
+    summarySheet.getRow(summarySheet.rowCount).font = { bold: true };
+    summarySheet.views = [{ state: 'frozen', ySplit: 1 }];
+  };
+
+  const createMemberSheet = (workbook, memberName, memberData, month) => {
+    const sheet = workbook.addWorksheet(memberName.slice(0, 31));
+
+    const sortedData = memberData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const projects = Array.from(new Set(
+      sortedData.flatMap(d =>
+        [...(d.yesterdayWork || []), ...(d.todayActuals || [])]
+          .filter(t => t.task?.trim())
+          .map(t => t.project || 'Unassigned')
+      )
+    )).sort();
+
+    // ===================== COLUMNS =====================
+    const columns = [{ header: 'Date', key: 'date', width: 14 }];
+    projects.forEach(p => {
+      columns.push({ header: `${p} Task`, width: 35 });
+      columns.push({ header: `${p} Duration`, width: 14 });
+    });
+
+    sheet.columns = columns;
+
+    // ===================== TITLE (ROW 1) =====================
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = `${memberName} - ${month}`;
+    titleCell.font = { bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+
+    // Merge full row for title
+    sheet.mergeCells(1, 1, 1, sheet.columnCount);
+
+    // ===================== HEADER ROW 2 =====================
+    const header1 = sheet.getRow(2);
+
+    sheet.mergeCells('A2:A3');
+    const dateCell = header1.getCell(1);
+    dateCell.value = 'Date';
+    styleHeader(dateCell);
+
+    let col = 2;
+    projects.forEach(p => {
+      sheet.mergeCells(2, col, 2, col + 1);
+
+      const c = header1.getCell(col);
+      c.value = p;
+      styleHeader(c);
+
+      col += 2;
+    });
+
+    // ===================== HEADER ROW 3 =====================
+    const header2 = sheet.getRow(3);
+
+    col = 2;
+    projects.forEach(() => {
+      ['Task', 'Duration'].forEach((h, i) => {
+        const c = header2.getCell(col + i);
+        c.value = h;
+        styleSubHeader(c);
+      });
+      col += 2;
+    });
+
+    // ===================== DATA =====================
+    sortedData.forEach(doc => {
+      const date = new Date(doc.date);
+      const isWeekend = [0, 6].includes(date.getDay());
+
+      const row = sheet.addRow({});
+      row.getCell(1).value = date;
+      row.getCell(1).numFmt = 'dd-mmm-yy';
+
+      // 🔴 HOLIDAY ROW
+      if (isWeekend) {
+        const lastCol = sheet.columnCount;
+
+        sheet.mergeCells(row.number, 1, row.number, lastCol);
+
+        const c = row.getCell(1);
+        c.value = 'HOLIDAY';
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } };
+        c.font = { bold: true };
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+
+        // BORDER
+        c.border = fullBorder();
+
+        return;
+      }
+
+      const grouped = {};
+      (doc.todayActuals || [])
+        .forEach(t => {
+          if (!t.task?.trim()) return;
+          const p = t.project || 'Unassigned';
+          if (!grouped[p]) grouped[p] = [];
+          grouped[p].push({
+            task: t.task,
+            hrs: durationToHours(t.actualTime || t.time)
+          });
+        });
+
+      projects.forEach((p, i) => {
+        const base = 2 + i * 2;
+        const tasks = grouped[p] || [];
+
+        const text = tasks.map(t => `• ${t.task}`).join('\n');
+        const total = tasks.reduce((s, t) => s + t.hrs, 0);
+
+        const taskCell = row.getCell(base);
+        const durCell = row.getCell(base + 1);
+
+        taskCell.value = text || '-';
+        taskCell.alignment = { wrapText: true };
+
+        durCell.value = Number(total.toFixed(2));
+        durCell.numFmt = '0.00';
+
+        // Borders
+        taskCell.border = fullBorder();
+        durCell.border = fullBorder();
+      });
+
+      row.getCell(1).border = fullBorder();
+    });
+
+    sheet.views = [{ state: 'frozen', ySplit: 3 }];
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Monthly Timesheet</h2>
-          <p className="text-slate-500 dark:text-slate-400">Export detailed breakdown by project category.</p>
-        </div>
-        <div className="flex gap-2">
-          <input
-            type="month"
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className={inputBase}
-          />
-          <button
-            onClick={downloadExcel}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 transition"
-          >
-            <FileSpreadsheet size={18} /> Export Excel (Detailed)
-          </button>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Monthly Reports</h2>
+          <p className="text-slate-500 dark:text-slate-400">Export detailed Excel reports for selected month</p>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow border border-slate-200 dark:border-slate-700 overflow-hidden p-8 text-center text-slate-500 dark:text-slate-400">
-        <FileSpreadsheet size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-        <p>Select a month and click Export to download the formatted Excel report.</p>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow border border-slate-200 dark:border-slate-700 p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div className="flex items-center gap-4">
+            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Select Month:</label>
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className={`${inputBase} w-auto`}
+            />
+          </div>
+          <button
+            onClick={downloadExcel}
+            disabled={isExporting || !filteredData.length}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${isExporting || !filteredData.length
+              ? 'bg-slate-400 cursor-not-allowed text-slate-200'
+              : 'bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg'
+              }`}
+          >
+            {isExporting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                Exporting...
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet size={20} />
+                Export Excel Report
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-slate-800 dark:text-white">{summaryStats.members}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Team Members</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-slate-800 dark:text-white">{summaryStats.totalEntries}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Total Entries</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-600">{summaryStats.workingEntries}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Working Days</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-amber-600">{summaryStats.leaveEntries}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Leave Days</div>
+          </div>
+        </div>
+
+        {chartData.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Duration Worked by Team Members</h3>
+            <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg">
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ angle: -35, textAnchor: 'end' }} interval={0} height={80} />
+                  <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft' }} />
+                  <Tooltip formatter={(value) => [`${value} hours`, 'Duration']} />
+                  <Legend />
+                  <Bar dataKey="hours" fill="#3b82f6" name="Total Hours" barSize={40} minPointSize={3} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {!filteredData.length && (
+          <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+            <FileSpreadsheet size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
+            <p>No data available for the selected month.</p>
+            <p className="text-sm">Try selecting a different month or ensure data has been entered.</p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // --- VIEW 4: Audit Logs ---
-function AuditLogsView({ data }) {
-  const sortedLogs = [...data].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+function AuditLogsView({ data, showNotification }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedAction, setSelectedAction] = useState('all');
+  const [selectedUser, setSelectedUser] = useState('all');
+
+  const sortedLogs = [...data].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+  const filteredLogs = sortedLogs.filter(log => {
+    const matchesSearch = !searchTerm ||
+      log.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.action?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.details?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesAction = selectedAction === 'all' || log.action === selectedAction;
+    const matchesUser = selectedUser === 'all' || log.userName === selectedUser;
+
+    return matchesSearch && matchesAction && matchesUser;
+  });
+
+  const uniqueActions = [...new Set(data.map(log => log.action).filter(Boolean))];
+  const uniqueUsers = [...new Set(data.map(log => log.userName).filter(Boolean))];
+
+  const exportAuditLogs = async (format = 'xlsx') => {
+    if (!filteredLogs.length) {
+      showNotification('warning', 'No log entries to export.');
+      return;
+    }
+
+    if (format === 'csv') {
+      const header = ['Timestamp (IST)', 'User', 'Action', 'Target Date', 'Details'];
+      const rows = filteredLogs.map((log) => [
+        getISTString(log.timestamp),
+        log.userName || '',
+        log.action || '',
+        formatDate(log.targetDate || getTodayString()),
+        log.details || ''
+      ]);
+      const csv = [header, ...rows]
+        .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        .join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showNotification('success', 'Audit logs exported as CSV!');
+      return;
+    }
+
+    if (!window.ExcelJS) {
+      showNotification('warning', 'Excel export library is loading. Please wait and try again.');
+      return;
+    }
+
+    const workbook = new window.ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Audit Logs');
+
+    sheet.columns = [
+      { header: 'Timestamp (IST)', key: 'timestamp', width: 24 },
+      { header: 'User', key: 'user', width: 18 },
+      { header: 'Action', key: 'action', width: 25 },
+      { header: 'Target Date', key: 'targetDate', width: 15 },
+      { header: 'Details', key: 'details', width: 40 }
+    ];
+
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    sheet.getRow(1).alignment = { horizontal: 'center' };
+
+    filteredLogs.forEach((log, index) => {
+      const row = sheet.addRow({
+        timestamp: getISTString(log.timestamp),
+        user: log.userName || '',
+        action: log.action || '',
+        targetDate: formatDate(log.targetDate || getTodayString()),
+        details: log.details || ''
+      });
+
+      // Alternate row colors
+      if (index % 2 === 1) {
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit_logs_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showNotification('success', 'Audit logs exported as Excel!');
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-          <History className="text-indigo-600" /> System Audit Logs
-        </h2>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Track actions and status updates dynamically.</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Audit Logs</h2>
+          <p className="text-slate-500 dark:text-slate-400">View and export system activity logs</p>
+        </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-          <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700 relative">
-            <thead className="bg-slate-50 dark:bg-slate-900/50 sticky top-0">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">User</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
-                <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Target Date</th>
-                <th className="px-6 py-3 text-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Approved</th>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow border border-slate-200 dark:border-slate-700 p-6">
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1">
+            <input
+              type="text"
+              placeholder="Search logs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`${inputBase} w-full`}
+            />
+          </div>
+          <div className="sm:w-48">
+            <select
+              value={selectedAction}
+              onChange={(e) => setSelectedAction(e.target.value)}
+              className={inputBase}
+            >
+              <option value="all">All Actions</option>
+              {uniqueActions.map(action => (
+                <option key={action} value={action}>{action}</option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:w-48">
+            <select
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              className={inputBase}
+            >
+              <option value="all">All Users</option>
+              {uniqueUsers.map(user => (
+                <option key={user} value={user}>{user}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => exportAuditLogs('csv')}
+              disabled={!filteredLogs.length}
+              className={`px-4 py-2 rounded font-medium transition ${filteredLogs.length
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-slate-400 cursor-not-allowed text-slate-200'
+                }`}
+            >
+              Export CSV
+            </button>
+            <button
+              onClick={() => exportAuditLogs('xlsx')}
+              disabled={!filteredLogs.length}
+              className={`px-4 py-2 rounded font-medium transition ${filteredLogs.length
+                ? 'bg-green-600 hover:bg-green-700 text-white'
+                : 'bg-slate-400 cursor-not-allowed text-slate-200'
+                }`}
+            >
+              Export Excel
+            </button>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-slate-800 dark:text-white">{data.length}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Total Logs</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-600">{filteredLogs.length}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Filtered Logs</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-600">{uniqueUsers.length}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Active Users</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-600">{uniqueActions.length}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">Action Types</div>
+          </div>
+        </div>
+
+        {/* Logs Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-slate-100 dark:bg-slate-700">
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">Timestamp</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">User</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">Action</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">Target Date</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">Details</th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-              {sortedLogs.map((log) => {
-                let actionText = "Updated Status";
-                if (log.status === 'LEAVE') actionText = "Marked as Leave";
-                else if (log.createdAt === log.updatedAt) actionText = "Submitted New Status";
-
-                return (
-                  <tr key={`${log.id}-${log.updatedAt}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
-                      {new Date(log.updatedAt).toLocaleString()}
+            <tbody>
+              {filteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                    {data.length === 0 ? 'No audit logs available.' : 'No logs match the current filters.'}
+                  </td>
+                </tr>
+              ) : (
+                filteredLogs.map((log) => (
+                  <tr key={log.id} className="border-b border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                      {getISTString(log.timestamp)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-slate-900 dark:text-white">{log.userName}</div>
+                    <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-white">
+                      {log.userName || 'Unknown'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full 
-                        ${actionText === 'Submitted New Status' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300' :
-                          actionText === 'Marked as Leave' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300' :
-                            'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'}`}>
-                        {actionText}
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${log.action?.includes('Created') || log.action?.includes('Submitted')
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                        : log.action?.includes('Updated') || log.action?.includes('Assigned')
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                          : log.action?.includes('Deleted') || log.action?.includes('Removed')
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                            : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
+                        }`}>
+                        {log.action || 'Unknown'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-300 font-medium">
-                      {formatDate(log.date)}
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                      {formatDate(log.targetDate || getTodayString())}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      {log.approved ? (
-                        <span className="inline-flex text-green-600 dark:text-green-400"><CheckCircle2 size={18} /></span>
-                      ) : (
-                        <span className="text-slate-300 dark:text-slate-600">-</span>
-                      )}
+                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate" title={log.details}>
+                      {log.details || '-'}
                     </td>
                   </tr>
-                );
-              })}
-              {sortedLogs.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400 italic">No logs available.</td>
-                </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -1677,14 +3066,21 @@ function AuditLogsView({ data }) {
 }
 
 // --- VIEW 5: Admin Panel ---
-function AdminView({ users, setUsers, config, setConfig }) {
+function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserProfile, recordAudit, showNotification, showConfirm }) {
   const [newMember, setNewMember] = useState({ id: '', name: '', team: MEMBER_TEAMS[0], pin: '' });
 
-  const handleAssign = (userId) => {
-    if (window.confirm("Confirm: Assign this user as the new Weekly Scrum Master?")) {
-      setConfig({ ...config, currentScrumMasterId: userId });
-      alert("Scrum Master Updated Successfully!");
-    }
+  const handleAssign = async (userId) => {
+    const confirmed = await showConfirm("Confirm: Assign this user as the new Weekly Scrum Master?", 'Assign Scrum Master');
+    if (!confirmed) return;
+    setAppConfig(prev => ({ ...prev, currentScrumMasterId: userId }));
+    const assignedUser = users.find(u => u.id === userId);
+    recordAudit({
+      userName: currentUserProfile.name,
+      action: 'Assigned Weekly Scrum Master',
+      targetDate: getTodayString(),
+      details: `Assigned ${assignedUser?.name || userId} as the new Weekly Scrum Master.`
+    });
+    showNotification('success', "Scrum Master Updated Successfully!");
   };
 
   const handleAddMember = () => {
@@ -1697,21 +3093,27 @@ function AdminView({ users, setUsers, config, setConfig }) {
     };
 
     if (!payload.id || !payload.name || !payload.pin) {
-      alert('Please enter member id, name and PIN.');
+      showNotification('error', 'Please enter member id, name and PIN.');
       return;
     }
     if (users.some((u) => u.id === payload.id)) {
-      alert('Member ID already exists. Use a unique ID.');
+      showNotification('error', 'Member ID already exists. Use a unique ID.');
       return;
     }
     if (users.some((u) => u.pin === payload.pin)) {
-      alert('PIN already used. Use a unique PIN for each member.');
+      showNotification('error', 'PIN already used. Use a unique PIN for each member.');
       return;
     }
 
     setUsers((prev) => [...prev, payload]);
     setNewMember({ id: '', name: '', team: MEMBER_TEAMS[0], pin: '' });
-    alert('New member added successfully.');
+    recordAudit({
+      userName: currentUserProfile.name,
+      action: 'Added New Member',
+      targetDate: getTodayString(),
+      details: `Added new member ${payload.name} (ID: ${payload.id}, Team: ${payload.team}).`
+    });
+    showNotification('success', 'New member added successfully.');
   };
 
   return (
@@ -1757,11 +3159,11 @@ function AdminView({ users, setUsers, config, setConfig }) {
         </div>
         <button
           onClick={handleAddMember}
-          className="mb-8 bg-indigo-600 text-white px-4 py-2 rounded text-sm font-semibold hover:bg-indigo-700"
+          className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-2 rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 active:scale-95 ripple-button"
         >
           Add Member
         </button>
-        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Assign Weekly Scrum Master</h3>
+        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 mt-6">Assign Weekly Scrum Master</h3>
         <div className="space-y-2">
           {users.filter(u => u.role !== 'ADMIN').map(user => (
             <div key={user.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
@@ -1774,18 +3176,26 @@ function AdminView({ users, setUsers, config, setConfig }) {
                   <p className="text-xs text-slate-500 dark:text-slate-400">{user.team}</p>
                 </div>
               </div>
-              {config.currentScrumMasterId === user.id ? (
-                <span className="bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-400 text-xs font-bold px-3 py-1 rounded-full border border-amber-200 dark:border-amber-800">
-                  Current Master
-                </span>
-              ) : (
+              <div className="flex items-center gap-2">
+                {appConfigState.currentScrumMasterId === user.id ? (
+                  <span className="bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-400 text-xs font-bold px-3 py-1 rounded-full border border-amber-200 dark:border-amber-800">
+                    Current Master
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleAssign(user.id)}
+                    className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-3 py-1.5 rounded transition"
+                  >
+                    Assign
+                  </button>
+                )}
                 <button
-                  onClick={() => handleAssign(user.id)}
-                  className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 px-3 py-1.5 rounded transition"
+                  onClick={() => handleChangePin(user)}
+                  className="text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600 px-3 py-1.5 rounded transition"
                 >
-                  Assign
+                  Change PIN
                 </button>
-              )}
+              </div>
             </div>
           ))}
         </div>

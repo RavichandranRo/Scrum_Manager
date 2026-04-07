@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a8a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="32" height="32" rx="4" fill="url(#bg)"/>
+  
+  <!-- Kanban Board -->
+  <rect x="4" y="6" width="24" height="20" rx="2" fill="#ffffff" opacity="0.9"/>
+  
+  <!-- Columns -->
+  <line x1="12" y1="8" x2="12" y2="24" stroke="#1e3a8a" stroke-width="1"/>
+  <line x1="20" y1="8" x2="20" y2="24" stroke="#1e3a8a" stroke-width="1"/>
+  
+  <!-- Column Headers -->
+  <text x="6" y="11" font-family="Arial, sans-serif" font-size="3" font-weight="bold" fill="#1e3a8a">TO</text>
+  <text x="14" y="11" font-family="Arial, sans-serif" font-size="3" font-weight="bold" fill="#1e3a8a">DO</text>
+  <text x="22" y="11" font-family="Arial, sans-serif" font-size="3" font-weight="bold" fill="#1e3a8a">DONE</text>
+  
+  <!-- Cards -->
+  <rect x="5" y="13" width="5" height="3" rx="0.5" fill="#10b981"/>
+  <rect x="5" y="17" width="5" height="3" rx="0.5" fill="#f59e0b"/>
+  <rect x="13" y="13" width="5" height="3" rx="0.5" fill="#3b82f6"/>
+  <rect x="21" y="13" width="5" height="3" rx="0.5" fill="#ef4444"/>
+  <rect x="21" y="17" width="5" height="3" rx="0.5" fill="#8b5cf6"/>
+</svg>
