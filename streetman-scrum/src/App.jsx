@@ -17,7 +17,7 @@ const appId = "streetman-scrum-automation";
 const BACKEND_URL = 'http://192.168.26.210:3001';
 
 // --- TEAM CONFIGURATION ---
-const PROJECTS = ['SMNGUI', 'Hardware', 'Core', 'SNC', 'AWS'];
+const PROJECTS = ['SMNGUI', 'Hardware', 'Core', 'SNC', 'AWS', 'CST'];
 const MEMBER_TEAMS = ['StreetMan QA', 'StreetMan Dev', 'Hardware', 'StreetMan NexGen Dev'];
 const CUSTOM_PROJECTS_STORAGE_KEY = 'streetman_custom_projects';
 const CUSTOM_USERS_STORAGE_KEY = 'streetman_custom_users';
@@ -28,7 +28,8 @@ const PROJECT_CATEGORIES = {
   'SMNGUI': 'SMNGUI',
   'Core': 'Core',
   'SNC': 'SNC',
-  'AWS': 'AWS'
+  'AWS': 'AWS',
+  'CST': 'CST'
 };
 const PROJECT_OPTIONS = [...Object.keys(PROJECT_CATEGORIES), 'Others'];
 
@@ -205,6 +206,18 @@ const buildOutlookEmailHtml = (selectedDate, currentSM, dailyData) => {
         <td style="padding: 14px 12px; border-bottom: ${borderColor}; font-weight: 600; color: #1e3a8a;">${row.userName}</td>
         <td style="padding: 14px 12px; border-bottom: ${borderColor}; text-align: center; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #92400e; font-weight: 600;" colspan="2">🏖️ ON LEAVE</td>
       </tr>`;
+    } else if (
+      (!row.yesterdayWork || row.yesterdayWork.length === 0) &&
+      (!row.todayPlan || row.todayPlan.length === 0)
+    ) {
+      htmlTable += `<tr style="background-color: ${bg};">
+    <td style="padding: 14px 12px; border-bottom: ${borderColor}; font-weight: 600; color: #1e3a8a;">
+      ${row.userName}
+    </td>
+    <td style="padding: 14px 12px; border-bottom: ${borderColor}; text-align: center; background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); color: #991b1b; font-weight: 600;" colspan="2">
+      ⚠️ NOT FILLED
+    </td>
+  </tr>`;
     } else {
       const yesterday = row.yesterdayWork.length > 0
         ? row.yesterdayWork.map(t => `<li style="margin: 4px 0; color: #333; font-size: 14px;">${t.task}</li>`).join('')
@@ -622,18 +635,6 @@ export default function App() {
     localStorage.setItem(CUSTOM_USERS_STORAGE_KEY, JSON.stringify(customUsers));
   }, [usersState]);
 
-  useEffect(() => {
-    localStorage.setItem(CUSTOM_PROJECTS_STORAGE_KEY, JSON.stringify(customProjects));
-  }, [customProjects]);
-
-  useEffect(() => {
-    localStorage.setItem(AUDIT_LOGS_STORAGE_KEY, JSON.stringify(auditLogsState));
-  }, [auditLogsState]);
-
-  useEffect(() => {
-    localStorage.setItem(APP_CONFIG_STORAGE_KEY, JSON.stringify(appConfigState));
-  }, [appConfigState]);
-
   const isAdmin = currentUserProfile?.role === 'ADMIN';
   const isScrumMaster = currentUserProfile?.id === appConfigState.currentScrumMasterId || isAdmin;
 
@@ -649,6 +650,7 @@ export default function App() {
     setAuditLogs((prev) => [entry, ...prev]);
   };
 
+  // AFTER:
   useEffect(() => {
     const currentWeek = getWeekStartDate(getTodayString());
     if (appConfigState.lastRotationWeek === currentWeek) return;
@@ -668,7 +670,7 @@ export default function App() {
       targetDate: currentWeek,
       details: `Auto-rotated based on order to ${eligible[nextIndex].name}`
     });
-  }, [appConfigState.lastRotationWeek, appConfigState.currentScrumMasterId, usersState]);
+  }, [appConfigState.lastRotationWeek, usersState]);
 
   // --- AUTH LOADING ---
   useEffect(() => {
@@ -683,16 +685,7 @@ export default function App() {
     const fetchStatuses = async () => {
       try {
         const res = await fetch(`${BACKEND_URL}/api/daily-status`);
-        if (res.ok) {
-          const data = await res.json();
 
-          if (data?.appConfig?.currentScrumMasterId) {
-            setAppConfig(prev => ({
-              ...prev,
-              ...data.appConfig
-            }));
-          }
-        }
 
         if (!res.ok) throw new Error("Failed to fetch data");
         const data = await res.json();
@@ -704,29 +697,29 @@ export default function App() {
       }
     };
     // Load System Configuration from Server to sync across all browsers
-    const fetchSystemData = async () => {
-      try {
-        const res = await fetch(`${BACKEND_URL}/api/system-data`);
-        if (!res.ok) return;
+    // const fetchSystemData = async () => {
+    //   try {
+    //     const res = await fetch(`${BACKEND_URL}/api/system-data`);
+    //     if (!res.ok) return;
 
-        const data = await res.json();
+    //     const data = await res.json();
 
-        if (data?.appConfig?.currentScrumMasterId) {
-          setAppConfig(prev => ({
-            ...prev,
-            ...data.appConfig
-          }));
-        }
+    //     if (data?.appConfig?.currentScrumMasterId) {
+    //       setAppConfig(prev => ({
+    //         ...prev,
+    //         ...data.appConfig
+    //       }));
+    //     }
 
-        if (data?.auditLogs) setAuditLogsState(data.auditLogs);
-        if (data?.users) setUsersState(data.users);
+    //     if (data?.auditLogs) setAuditLogsState(data.auditLogs);
+    //     if (data?.users) setUsersState(data.users);
 
-      } catch (err) {
-        console.warn("Using local config (API failed)");
-      }
-    };
+    //   } catch (err) {
+    //     console.warn("Using local config (API failed)");
+    //   }
+    // };
 
-    fetchSystemData();
+
     fetchStatuses();
     const interval = setInterval(fetchStatuses, 10000);
     return () => clearInterval(interval);
@@ -969,8 +962,8 @@ export default function App() {
           {activeTab === 'admin' && isAdmin && (
             <AdminView
               users={usersState}
-              setUsers={setUsersState}
-              config={appConfigState}
+              setUsers={setUsers}
+              appConfigState={appConfigState}
               setAppConfig={setAppConfig}
               currentUserProfile={currentUserProfile}
               recordAudit={recordAudit}
@@ -3066,7 +3059,7 @@ function AuditLogsView({ data, showNotification }) {
 }
 
 // --- VIEW 5: Admin Panel ---
-function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserProfile, recordAudit, showNotification, showConfirm }) {
+function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserProfile, recordAudit, showNotification, showConfirm, handleChangePin }) {
   const [newMember, setNewMember] = useState({ id: '', name: '', team: MEMBER_TEAMS[0], pin: '' });
 
   const handleAssign = async (userId) => {
