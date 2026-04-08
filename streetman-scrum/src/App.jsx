@@ -19,8 +19,6 @@ const BACKEND_URL = 'http://192.168.26.210:3001';
 // --- TEAM CONFIGURATION ---
 const PROJECTS = ['SMNGUI', 'Hardware', 'Core', 'SNC', 'AWS', 'CST'];
 const MEMBER_TEAMS = ['StreetMan QA', 'StreetMan Dev', 'Hardware', 'StreetMan NexGen Dev'];
-const CUSTOM_PROJECTS_STORAGE_KEY = 'streetman_custom_projects';
-const CUSTOM_USERS_STORAGE_KEY = 'streetman_custom_users';
 
 // PROJECT MAPPING FOR EXPORT
 const PROJECT_CATEGORIES = {
@@ -33,8 +31,7 @@ const PROJECT_CATEGORIES = {
 };
 const PROJECT_OPTIONS = [...Object.keys(PROJECT_CATEGORIES), 'Others'];
 
-const AUDIT_LOGS_STORAGE_KEY = 'streetman_audit_logs';
-const APP_CONFIG_STORAGE_KEY = 'streetman_app_config';
+const SYSTEM_DATA_STORAGE_KEY = 'streetman_system_data';
 const JIRA_PATTERN = /[A-Z]{2,}-\d+/g;
 
 // HARDCODED TEAM MEMBERS
@@ -509,83 +506,106 @@ export default function App() {
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
   const [modalState, setModalState] = useState({ open: false, mode: 'confirm', title: '', message: '', inputValue: '', placeholder: '', inputType: 'text' });
   const modalResolver = useRef(null);
+  const defaultSystemData = useMemo(() => ({
+    appConfig: { currentScrumMasterId: '1349' },
+    auditLogs: [],
+    users: DEFAULT_USERS,
+    customProjects: [],
+    teamsReminderConfig: { recipients: '' },
+    reminderTriggers: {}
+  }), []);
+  const systemDataRef = useRef(defaultSystemData);
+  const mergeSystemData = (incoming) => ({
+    ...defaultSystemData,
+    ...systemDataRef.current,
+    ...(incoming || {})
+  });
+
+  const normalizeSystemData = (raw) => {
+    if (!raw) return null;
+    if (Array.isArray(raw)) return raw[0] || null;
+    if (raw[SYSTEM_DATA_STORAGE_KEY]) return raw[SYSTEM_DATA_STORAGE_KEY];
+    if (raw.value && typeof raw.value === 'object') return raw.value;
+    if (raw.data && typeof raw.data === 'object') return raw.data;
+    return raw;
+  };
   // SERVER SYNC HELPER - Gracefully falls back if backend endpoint doesn't exist
   const syncSystemData = async (payload) => {
+    const mergedPayload = mergeSystemData(payload);
+    systemDataRef.current = mergedPayload;
     try {
       await fetch(`${BACKEND_URL}/api/system-data`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          ...mergedPayload,
+          [SYSTEM_DATA_STORAGE_KEY]: mergedPayload
+        })
       });
     } catch (e) {
-      // Backend route /api/system-data not configured yet, falling back to local
+      // Backend route /api/system-data not configured yet
     }
   };
 
-  // WRAPPED STATE SETTERS (Automatically pushes to Backend and LocalStorage)
-  const [appConfigState, setAppConfigState] = useState(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(APP_CONFIG_STORAGE_KEY) || 'null');
-      return stored || { currentScrumMasterId: '1349' };
-    } catch {
-      return { currentScrumMasterId: '1349' };
-    }
-  });
+  // WRAPPED STATE SETTERS (Automatically pushes to backend DB)
+  const [appConfigState, setAppConfigState] = useState(defaultSystemData.appConfig);
 
   const setAppConfig = (value) => {
     setAppConfigState(prev => {
       const newConfig = typeof value === 'function' ? value(prev) : value;
-      localStorage.setItem(APP_CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
       syncSystemData({ appConfig: newConfig });
       return newConfig;
     });
   };
 
-  const [auditLogsState, setAuditLogsState] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(AUDIT_LOGS_STORAGE_KEY)) || []; }
-    catch { return []; }
-  });
+  const [auditLogsState, setAuditLogsState] = useState(defaultSystemData.auditLogs);
 
   const setAuditLogs = (value) => {
     setAuditLogsState(prev => {
       const newLogs = typeof value === 'function' ? value(prev) : value;
-      localStorage.setItem(AUDIT_LOGS_STORAGE_KEY, JSON.stringify(newLogs));
       syncSystemData({ auditLogs: newLogs });
       return newLogs;
     });
   };
 
-  const [usersState, setUsersState] = useState(() => {
-    try {
-      const storedUsers = JSON.parse(localStorage.getItem(CUSTOM_USERS_STORAGE_KEY) || '[]');
-      const merged = [...DEFAULT_USERS];
-      storedUsers.forEach(su => {
-        const idx = merged.findIndex(d => d.id === su.id);
-        if (idx >= 0) merged[idx] = su;
-        else merged.push(su);
-      });
-      return merged;
-    } catch { return DEFAULT_USERS; }
-  });
+  const [usersState, setUsersState] = useState(defaultSystemData.users);
 
   const setUsers = (value) => {
     setUsersState(prev => {
       const newUsers = typeof value === 'function' ? value(prev) : value;
-      const customUsers = newUsers.filter((u) => !DEFAULT_USERS.some((d) => d.id === u.id) || u.pin !== DEFAULT_USERS.find(d => d.id === u.id)?.pin);
       localStorage.setItem(CUSTOM_USERS_STORAGE_KEY, JSON.stringify(customUsers));
       syncSystemData({ users: newUsers });
       return newUsers;
     });
   };
 
-  const [customProjects, setCustomProjects] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(CUSTOM_PROJECTS_STORAGE_KEY) || '[]'); }
-    catch { return []; }
-  });
+  const [customProjects, setCustomProjectsState] = useState(defaultSystemData.customProjects);
+  const setCustomProjects = (value) => {
+    setCustomProjectsState(prev => {
+      const newProjects = typeof value === 'function' ? value(prev) : value;
+      syncSystemData({ customProjects: newProjects });
+      return newProjects;
+    });
+  };
 
-  useEffect(() => {
-    localStorage.setItem(CUSTOM_PROJECTS_STORAGE_KEY, JSON.stringify(customProjects));
-  }, [customProjects]);
+  const [teamsReminderConfig, setTeamsReminderConfigState] = useState(defaultSystemData.teamsReminderConfig);
+  const setTeamsReminderConfig = (value) => {
+    setTeamsReminderConfigState(prev => {
+      const newConfig = typeof value === 'function' ? value(prev) : value;
+      syncSystemData({ teamsReminderConfig: newConfig });
+      return newConfig;
+    });
+  };
+
+  const [reminderTriggers, setReminderTriggersState] = useState(defaultSystemData.reminderTriggers);
+  const markReminderTriggered = (key) => {
+    setReminderTriggersState((prev) => {
+      if (prev[key]) return prev;
+      const next = { ...prev, [key]: '1' };
+      syncSystemData({ reminderTriggers: next });
+      return next;
+    });
+  };
 
   const [statusData, setStatusData] = useState([]);
 
@@ -630,11 +650,6 @@ export default function App() {
     setModalState((prev) => ({ ...prev, inputValue: value }));
   };
 
-  useEffect(() => {
-    const customUsers = usersState.filter((u) => !DEFAULT_USERS.some((d) => d.id === u.id));
-    localStorage.setItem(CUSTOM_USERS_STORAGE_KEY, JSON.stringify(customUsers));
-  }, [usersState]);
-
   const isAdmin = currentUserProfile?.role === 'ADMIN';
   const isScrumMaster = currentUserProfile?.id === appConfigState.currentScrumMasterId || isAdmin;
 
@@ -649,28 +664,6 @@ export default function App() {
     };
     setAuditLogs((prev) => [entry, ...prev]);
   };
-
-  // AFTER:
-  useEffect(() => {
-    const currentWeek = getWeekStartDate(getTodayString());
-    if (appConfigState.lastRotationWeek === currentWeek) return;
-    const eligible = usersState.filter((user) => user.role !== 'ADMIN');
-    if (!eligible.length) return;
-
-    const currentIndex = eligible.findIndex((user) => user.id === appConfigState.currentScrumMasterId);
-    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % eligible.length : 0;
-    setAppConfig((prev) => ({
-      ...prev,
-      currentScrumMasterId: eligible[nextIndex].id,
-      lastRotationWeek: currentWeek
-    }));
-    recordAudit({
-      userName: eligible[nextIndex].name,
-      action: 'Assigned Weekly Scrum Master',
-      targetDate: currentWeek,
-      details: `Auto-rotated based on order to ${eligible[nextIndex].name}`
-    });
-  }, [appConfigState.lastRotationWeek, usersState]);
 
   // --- AUTH LOADING ---
   useEffect(() => {
@@ -696,34 +689,45 @@ export default function App() {
         setDbError("Could not connect to database server at " + BACKEND_URL);
       }
     };
-    // Load System Configuration from Server to sync across all browsers
-    // const fetchSystemData = async () => {
-    //   try {
-    //     const res = await fetch(`${BACKEND_URL}/api/system-data`);
-    //     if (!res.ok) return;
 
-    //     const data = await res.json();
+    const fetchSystemData = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/system-data`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const merged = {
+          ...defaultSystemData,
+          ...(data?.[SYSTEM_DATA_STORAGE_KEY] || data || {})
+        };
 
-    //     if (data?.appConfig?.currentScrumMasterId) {
-    //       setAppConfig(prev => ({
-    //         ...prev,
-    //         ...data.appConfig
-    //       }));
-    //     }
+        if (
+          merged.appConfig?.currentScrumMasterId &&
+          merged.appConfig.currentScrumMasterId !== appConfigState.currentScrumMasterId
+        ) {
+          setAppConfigState(prev => ({
+            ...prev,
+            ...merged.appConfig
+          }));
+        }
 
-    //     if (data?.auditLogs) setAuditLogsState(data.auditLogs);
-    //     if (data?.users) setUsersState(data.users);
-
-    //   } catch (err) {
-    //     console.warn("Using local config (API failed)");
-    //   }
-    // };
-
+        if (Array.isArray(merged.auditLogs)) setAuditLogsState(merged.auditLogs);
+        if (Array.isArray(merged.users) && merged.users.length > 0) setUsersState(merged.users);
+        if (Array.isArray(merged.customProjects)) setCustomProjectsState(merged.customProjects);
+        if (merged.teamsReminderConfig) setTeamsReminderConfigState(merged.teamsReminderConfig);
+        if (merged.reminderTriggers && typeof merged.reminderTriggers === 'object') setReminderTriggersState(merged.reminderTriggers);
+      } catch (err) {
+        console.warn("Could not fetch /api/system-data", err);
+      }
+    };
 
     fetchStatuses();
-    const interval = setInterval(fetchStatuses, 10000);
+    fetchSystemData();
+    const interval = setInterval(() => {
+      fetchStatuses();
+      fetchSystemData();
+    }, 10000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, defaultSystemData]);
 
   // --- HANDLERS ---
   const handleLogin = async (profile) => {
@@ -956,7 +960,23 @@ export default function App() {
               showNotification={showNotification}
             />
           )}
-          {activeTab === 'dashboard' && <DashboardView data={statusData} loggedInUser={currentUserProfile} assignedSM={assignedScrumMaster} users={usersState} canManage={isScrumMaster || isAdmin} setStatusData={setStatusData} recordAudit={recordAudit} showConfirm={showConfirm} showNotification={showNotification} />}
+          {activeTab === 'dashboard' && (
+            <DashboardView
+              data={statusData}
+              loggedInUser={currentUserProfile}
+              assignedSM={assignedScrumMaster}
+              users={usersState}
+              canManage={isScrumMaster || isAdmin}
+              setStatusData={setStatusData}
+              recordAudit={recordAudit}
+              showConfirm={showConfirm}
+              showNotification={showNotification}
+              teamsReminderConfig={teamsReminderConfig}
+              setTeamsReminderConfig={setTeamsReminderConfig}
+              reminderTriggers={reminderTriggers}
+              markReminderTriggered={markReminderTriggered}
+            />
+          )}
           {activeTab === 'reports' && (isScrumMaster || isAdmin) && <ReportsView data={statusData} showNotification={showNotification} />}
           {activeTab === 'logs' && (isScrumMaster || isAdmin) && <AuditLogsView data={auditLogsState} showNotification={showNotification} />}
           {activeTab === 'admin' && isAdmin && (
@@ -1477,7 +1497,21 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 }
 
 // --- VIEW 2: Scrum Dashboard ---
-function DashboardView({ data, loggedInUser, assignedSM, users, canManage, setStatusData, recordAudit, showConfirm, showNotification }) {
+function DashboardView({
+  data,
+  loggedInUser,
+  assignedSM,
+  users,
+  canManage,
+  setStatusData,
+  recordAudit,
+  showConfirm,
+  showNotification,
+  teamsReminderConfig,
+  setTeamsReminderConfig,
+  reminderTriggers,
+  markReminderTriggered
+}) {
   const isManagerView = canManage;
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [generatedContent, setGeneratedContent] = useState(null);
@@ -1485,14 +1519,6 @@ function DashboardView({ data, loggedInUser, assignedSM, users, canManage, setSt
   const [emailConfig, setEmailConfig] = useState({
     address: 'admin@company.com',
     to: 'smscrum@dhyan.com'
-  });
-
-  const [teamsReminderConfig, setTeamsReminderConfig] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('streetman_teams_reminder_config') || '{"recipients":""}');
-    } catch {
-      return { recipients: '' };
-    }
   });
 
   const dailyData = useMemo(() => data.filter(d => d.date === selectedDate), [data, selectedDate]);
@@ -1625,10 +1651,6 @@ function DashboardView({ data, loggedInUser, assignedSM, users, canManage, setSt
     return `Hello team, awaiting updates from: ${missingUsers.map(u => u.name).join(', ')}. Please submit ASAP.${recipientText ? `\n${recipientText}` : ''}`;
   };
 
-  useEffect(() => {
-    localStorage.setItem('streetman_teams_reminder_config', JSON.stringify(teamsReminderConfig));
-  }, [teamsReminderConfig]);
-
   const weeklyTrend = useMemo(() => {
     const end = new Date(selectedDate);
     const start = new Date(end);
@@ -1688,10 +1710,10 @@ function DashboardView({ data, loggedInUser, assignedSM, users, canManage, setSt
       const now = new Date();
       const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
       const todayKey = `${getTodayString()}-${hhmm}`;
-      const triggered = localStorage.getItem(`streetman_reminder_${todayKey}`);
+      const triggered = reminderTriggers[todayKey];
 
       if ((hhmm === '11:30' || hhmm === '18:30') && !triggered && missingUsers.length > 0) {
-        localStorage.setItem(`streetman_reminder_${todayKey}`, '1');
+        markReminderTriggered(todayKey);
         copyToClipboard(generateReminderText());
         const recipients = teamsReminderConfig.recipients
           .split(',')
@@ -1710,7 +1732,7 @@ function DashboardView({ data, loggedInUser, assignedSM, users, canManage, setSt
       }
     }, 10000);
     return () => clearInterval(interval);
-  }, [loggedInUser, missingUsers, teamsReminderConfig, selectedDate]);
+  }, [loggedInUser, missingUsers, teamsReminderConfig, selectedDate, reminderTriggers, markReminderTriggered]);
 
   const sendTeamsWebhook = async (type) => {
     if (!teamsWebhookUrl.trim()) {
