@@ -694,20 +694,23 @@ export default function App() {
       try {
         const res = await fetch(`${BACKEND_URL}/api/system-data`);
         if (!res.ok) return;
-        const data = await res.json();
+        const rawData = await res.json();
+        const normalized = normalizeSystemData(rawData);
         const merged = {
           ...defaultSystemData,
-          ...(data?.[SYSTEM_DATA_STORAGE_KEY] || data || {})
+          ...(normalized || {})
         };
 
-        if (
-          merged.appConfig?.currentScrumMasterId &&
-          merged.appConfig.currentScrumMasterId !== appConfigState.currentScrumMasterId
-        ) {
-          setAppConfigState(prev => ({
-            ...prev,
-            ...merged.appConfig
-          }));
+        systemDataRef.current = mergeSystemData(merged);
+
+        if (merged.appConfig?.currentScrumMasterId) {
+          setAppConfigState((prev) => {
+            if (prev.currentScrumMasterId === merged.appConfig.currentScrumMasterId) return prev;
+            return {
+              ...prev,
+              ...merged.appConfig
+            };
+          });
         }
 
         if (Array.isArray(merged.auditLogs)) setAuditLogsState(merged.auditLogs);
