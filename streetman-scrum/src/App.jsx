@@ -444,7 +444,7 @@ const Notification = ({ show, type, message }) => {
   const styles = stylesByType[type] || stylesByType.info;
 
   return (
-    <div className={`fixed bottom-6 right-6 z-[9999] animate-in slide-in-from-bottom-5 duration-300`}>
+    <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-top-5 duration-300`}>
       <div className={`${styles.bg} border ${styles.border} rounded-lg shadow-lg p-4 max-w-sm`}>
         <div className="flex gap-4">
           <div className={`${styles.iconBg} rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0 font-bold ${styles.title}`}>
@@ -3053,39 +3053,54 @@ function ReportsView({ data, showNotification, users }) {
         {chartData.length > 0 && (
           <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Hours by Team Member</h3>
-              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
-                <ResponsiveContainer width="100%" height={350}>
-                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.5} />
-                    <XAxis dataKey="name" tick={{ angle: -45, textAnchor: 'end', fontSize: 11 }} interval={0} height={100} />
-                    <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 12, offset: -5 }} tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(value) => [`${value} hours`, 'Duration']} cursor={{ fill: 'rgba(59, 130, 246, 0.05)' }} />
-                    <Bar dataKey="hours" fill="#3b82f6" name="Total Hours" barSize={32} radius={[4, 4, 0, 0]} minPointSize={3} />
-                  </BarChart>
-                </ResponsiveContainer>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Hours by Team Member</h3>
+            <button onClick={() => downloadChartAsPNG('bar-chart-container', `Hours_by_Member_${month}.png`)} className="text-xs flex items-center gap-1.5 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-3 py-1.5 rounded-lg transition-colors font-semibold shadow-sm active:scale-95 dark:bg-indigo-900/50 dark:text-indigo-300">
+              <ImageIcon size={14} /> Export Image
+            </button>
+          </div>
+          <div id="bar-chart-container" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+            <div className="w-full h-[350px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.5} />
+                  <XAxis dataKey="name" tick={{ angle: -45, textAnchor: 'end', fontSize: 11 }} interval={0} height={100} />
+                  <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 12, offset: -5 }} tick={{ fontSize: 12 }} />
+                  <Tooltip formatter={(value) => [`${value} hours`, 'Duration']} cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                  <Bar dataKey="hours" fill="#3b82f6" name="Total Hours" barSize={32} radius={[4, 4, 0, 0]} minPointSize={3} animationDuration={1500} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
               </div>
             </div>
             
             <div>
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Time Allocation by Project</h3>
-              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 flex justify-center items-center">
-                <ResponsiveContainer width="100%" height={350}>
-                  <PieChart>
-                    <Pie 
-                      data={projectChartData} cx="50%" cy="50%" 
-                      innerRadius={80} outerRadius={120} 
-                      paddingAngle={2} dataKey="value" nameKey="name" 
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}
-                    >
-                      {projectChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [`${value} hours`, 'Total Time']} />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                  </PieChart>
-                </ResponsiveContainer>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Time Allocation by Project</h3>
+            <button onClick={() => downloadChartAsPNG('pie-chart-container', `Time_by_Project_${month}.png`)} className="text-xs flex items-center gap-1.5 bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 py-1.5 rounded-lg transition-colors font-semibold shadow-sm active:scale-95 dark:bg-purple-900/50 dark:text-purple-300">
+              <ImageIcon size={14} /> Export Image
+            </button>
+          </div>
+          <div id="pie-chart-container" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow flex justify-center items-center">
+            <div className="w-full h-[350px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie 
+                    data={projectChartData} cx="50%" cy="50%" 
+                    innerRadius={80} outerRadius={120} 
+                    paddingAngle={3} dataKey="value" nameKey="name" 
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={true}
+                    animationDuration={1500}
+                  >
+                    {projectChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} style={{ outline: 'none' }} className="hover:opacity-80 transition-opacity duration-300 cursor-pointer" />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => [`${value} hours`, 'Total Time']} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
               </div>
             </div>
           </div>
@@ -3336,19 +3351,19 @@ function AuditLogsView({ data, showNotification }) {
           <table className="w-full border-collapse">
             <thead className="sticky top-0 z-20 shadow-sm bg-slate-100 dark:bg-slate-700">
               <tr>
-                <th onClick={() => handleSort('timestamp')} className="sticky left-0 z-30 bg-slate-100 dark:bg-slate-700 px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                <th onClick={() => handleSort('timestamp')} className="sticky top-0 left-0 z-30 bg-slate-100 dark:bg-slate-700 px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                   <div className="flex items-center gap-1.5"><Clock size={14} /> Timestamp {sortConfig.key === 'timestamp' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
                 </th>
-                <th onClick={() => handleSort('userName')} className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                <th onClick={() => handleSort('userName')} className="sticky top-0 z-20 bg-slate-100 dark:bg-slate-700 px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                   <div className="flex items-center gap-1.5"><User size={14} /> User {sortConfig.key === 'userName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
                 </th>
-                <th onClick={() => handleSort('action')} className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                <th onClick={() => handleSort('action')} className="sticky top-0 z-20 bg-slate-100 dark:bg-slate-700 px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                   <div className="flex items-center gap-1.5"><Activity size={14} /> Action {sortConfig.key === 'action' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
                 </th>
-                <th onClick={() => handleSort('targetDate')} className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                <th onClick={() => handleSort('targetDate')} className="sticky top-0 z-20 bg-slate-100 dark:bg-slate-700 px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                   <div className="flex items-center gap-1.5"><Calendar size={14} /> Target Date {sortConfig.key === 'targetDate' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
                 </th>
-                <th onClick={() => handleSort('details')} className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                <th onClick={() => handleSort('details')} className="sticky top-0 z-20 bg-slate-100 dark:bg-slate-700 px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
                   <div className="flex items-center gap-1.5"><Tag size={14} /> Details {sortConfig.key === 'details' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
                 </th>
               </tr>
@@ -3407,8 +3422,10 @@ function AuditLogsView({ data, showNotification }) {
 }
 
 // --- VIEW 5: Admin Panel ---
-function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserProfile, recordAudit, showNotification, showConfirm, handleChangePin }) {
-  const [newMember, setNewMember] = useState({ id: '', name: '', team: MEMBER_TEAMS[0], pin: '' });
+function AdminView({ users, setUsers, projectsState, setProjects, teamsState, setTeams, appConfigState, setAppConfig, currentUserProfile, recordAudit, showNotification, showConfirm, handleChangePin }) {
+  const [newMember, setNewMember] = useState({ id: '', name: '', team: teamsState[0] || 'Default', pin: '' });
+  const [newTeam, setNewTeam] = useState('');
+  const [newProject, setNewProject] = useState('');
 
   const handleAssign = async (userId) => {
     const confirmed = await showConfirm("Confirm: Assign this user as the new Weekly Scrum Master?", 'Assign Scrum Master');
@@ -3457,6 +3474,44 @@ function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserP
     showNotification('success', 'New member added successfully.');
   };
 
+  const handleAddTeam = () => {
+    if (!newTeam.trim()) return;
+    if (teamsState.includes(newTeam.trim())) {
+      showNotification('error', 'Team already exists.');
+      return;
+    }
+    setTeams(prev => [...prev, newTeam.trim()]);
+    setNewTeam('');
+    recordAudit({ userName: currentUserProfile.name, action: 'Added Team', details: `Added team ${newTeam.trim()}` });
+    showNotification('success', 'Team added.');
+  };
+
+  const handleRemoveTeam = async (team) => {
+    if (await showConfirm(`Remove team ${team}?`)) {
+      setTeams(prev => prev.filter(t => t !== team));
+      recordAudit({ userName: currentUserProfile.name, action: 'Removed Team', details: `Removed team ${team}` });
+    }
+  };
+
+  const handleAddProject = () => {
+    if (!newProject.trim()) return;
+    if (projectsState.includes(newProject.trim())) {
+      showNotification('error', 'Project already exists.');
+      return;
+    }
+    setProjects(prev => [...prev, newProject.trim()]);
+    setNewProject('');
+    recordAudit({ userName: currentUserProfile.name, action: 'Added Project', details: `Added project ${newProject.trim()}` });
+    showNotification('success', 'Project added.');
+  };
+
+  const handleRemoveProject = async (project) => {
+    if (await showConfirm(`Remove project ${project}?`)) {
+      setProjects(prev => prev.filter(p => p !== project));
+      recordAudit({ userName: currentUserProfile.name, action: 'Removed Project', details: `Removed project ${project}` });
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-indigo-900 text-white p-6 rounded-2xl shadow-lg">
@@ -3488,7 +3543,7 @@ function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserP
             value={newMember.team}
             onChange={(e) => setNewMember((prev) => ({ ...prev, team: e.target.value }))}
           >
-            {MEMBER_TEAMS.map((teamName) => <option key={teamName} value={teamName}>{teamName}</option>)}
+            {teamsState.map((teamName) => <option key={teamName} value={teamName}>{teamName}</option>)}
           </select>
           <input
             type="password"
@@ -3542,6 +3597,248 @@ function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserP
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 shadow-xl rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 p-6 mt-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Users size={18}/> Manage Teams</h3>
+          <div className="flex gap-2 mb-4">
+            <input type="text" placeholder="New Team Name" className={`flex-1 ${inputBase}`} value={newTeam} onChange={e => setNewTeam(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddTeam()}/>
+            <button onClick={handleAddTeam} className="bg-indigo-600 text-white px-3 rounded hover:bg-indigo-700"><PlusCircle size={16}/></button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {teamsState.map(team => (
+              <span key={team} className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full text-sm font-semibold flex items-center gap-2">
+                {team} <button onClick={() => handleRemoveTeam(team)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+              </span>
+            ))}
+          </div>
+        </div>
+        
+        <div>
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Layers size={18}/> Manage Projects</h3>
+          <div className="flex gap-2 mb-4">
+            <input type="text" placeholder="New Project Name" className={`flex-1 ${inputBase}`} value={newProject} onChange={e => setNewProject(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddProject()}/>
+            <button onClick={handleAddProject} className="bg-purple-600 text-white px-3 rounded hover:bg-purple-700"><PlusCircle size={16}/></button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {projectsState.map(project => (
+              <span key={project} className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-full text-sm font-semibold flex items-center gap-2">
+                {project} <button onClick={() => handleRemoveProject(project)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- VIEW 6: Kanban Board ---
+function KanbanView({ data, users }) {
+  const [filterDate, setFilterDate] = useState(getTodayString());
+  
+  const dayData = useMemo(() => data.filter(d => d.date === filterDate && d.status !== 'LEAVE'), [data, filterDate]);
+  
+  const columns = useMemo(() => {
+    const cols = {
+      'To Do (Plan)': [],
+      'In Progress': [],
+      'Blocked': [],
+      'Completed': []
+    };
+    
+    dayData.forEach(userDoc => {
+      (userDoc.todayPlan || []).forEach(task => {
+        if (task.task?.trim()) cols['To Do (Plan)'].push({ ...task, userName: userDoc.userName, userId: userDoc.userId });
+      });
+      (userDoc.todayActuals || []).forEach(task => {
+        if (!task.task?.trim()) return;
+        if (task.status === 'Blocked') cols['Blocked'].push({ ...task, userName: userDoc.userName, userId: userDoc.userId });
+        else if (task.status === 'In Progress') cols['In Progress'].push({ ...task, userName: userDoc.userName, userId: userDoc.userId });
+        else cols['Completed'].push({ ...task, userName: userDoc.userName, userId: userDoc.userId });
+      });
+    });
+    return cols;
+  }, [dayData]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
+      <div className="flex flex-col md:flex-row justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm shrink-0">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <KanbanSquare className="text-indigo-600" /> Kanban Board
+          </h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Visualize daily task flow.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">Date:</span>
+          <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className={inputBase} />
+        </div>
+      </div>
+
+      <div className="flex overflow-x-auto gap-6 pb-4 items-start flex-1 min-h-[500px]">
+        {Object.entries(columns).map(([colName, tasks], colIndex) => (
+          <div key={colName} className="flex-1 min-w-[300px] w-80 bg-slate-100 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700 flex flex-col max-h-[80vh]">
+            <div className="flex justify-between items-center mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">
+              <h3 className="font-bold text-slate-700 dark:text-slate-200">{colName}</h3>
+              <span className="bg-white dark:bg-slate-700 text-xs font-bold px-2 py-1 rounded shadow-sm">{tasks.length}</span>
+            </div>
+            <div className="overflow-y-auto pr-2 space-y-3 flex-1 hide-scrollbar">
+              {tasks.length === 0 && <p className="text-center text-slate-400 dark:text-slate-500 text-sm py-8 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl">No tasks</p>}
+              {tasks.map((task, idx) => (
+                <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 hover:shadow-md transition-shadow animate-in slide-in-from-bottom-2 duration-300 fill-mode-both" style={{ animationDelay: `${idx * 50}ms` }}>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{task.project || 'General'}</span>
+                    {task.priority && <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${task.priority === 'High' || task.priority === 'Critical' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>{task.priority}</span>}
+                  </div>
+                  <p className="text-sm text-slate-800 dark:text-slate-200 font-medium mb-3">{task.task}</p>
+                  {task.blockerReason && <div className="text-xs bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-2 rounded mb-3 flex gap-1.5"><AlertTriangle size={14} className="shrink-0"/> {task.blockerReason}</div>}
+                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><User size={12}/> {task.userName}</div>
+                    {task.time && <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 font-medium"><Clock size={12}/> {task.time}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- VIEW 7: Personal Analytics ---
+function AnalyticsView({ data, currentUserProfile }) {
+  const userStats = useMemo(() => {
+    const userEntries = data.filter(d => d.userId === currentUserProfile.id).sort((a,b) => new Date(a.date) - new Date(b.date));
+    
+    const last7Days = Array.from({length: 7}, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (6 - i));
+      return d.toISOString().split('T')[0];
+    });
+
+    const trendData = last7Days.map(date => {
+      const entry = userEntries.find(e => e.date === date);
+      let hrs = 0;
+      if (entry && entry.status !== 'LEAVE') {
+        (entry.todayActuals || []).forEach(t => hrs += durationToHours(t.actualTime || t.time));
+      }
+      return { name: formatDate(date).slice(0, 6), date, Hours: Number(hrs.toFixed(1)) };
+    });
+
+    let totalHoursMonth = 0;
+    const currentMonth = getTodayString().slice(0, 7);
+    userEntries.filter(e => e.date.startsWith(currentMonth)).forEach(e => {
+      if (e.status !== 'LEAVE') (e.todayActuals || []).forEach(t => totalHoursMonth += durationToHours(t.actualTime || t.time));
+    });
+
+    return { trendData, totalHoursMonth: totalHoursMonth.toFixed(1), entriesCount: userEntries.length };
+  }, [data, currentUserProfile]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto">
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row items-center gap-6 justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+            {currentUserProfile.name.charAt(0)}
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white">{currentUserProfile.name}</h2>
+            <p className="text-slate-500 dark:text-slate-400">{currentUserProfile.team} • {currentUserProfile.role}</p>
+          </div>
+        </div>
+        <div className="flex gap-4">
+          <div className="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-xl text-center border border-blue-100 dark:border-blue-800/50">
+            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{userStats.totalHoursMonth}h</p>
+            <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase mt-1">This Month</p>
+          </div>
+          <div className="bg-green-50 dark:bg-green-900/30 p-4 rounded-xl text-center border border-green-100 dark:border-green-800/50">
+            <p className="text-3xl font-bold text-green-600 dark:text-green-400">{userStats.entriesCount}</p>
+            <p className="text-xs font-bold text-green-800 dark:text-green-300 uppercase mt-1">Total Submissions</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-6">Last 7 Days Burn-down</h3>
+        <div className="h-72 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={userStats.trendData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.3} vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} dy={10} />
+              <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+              <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#8b5cf6', strokeWidth: 2, strokeDasharray: '4 4' }} />
+              <Line type="monotone" dataKey="Hours" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 5, fill: '#8b5cf6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} animationDuration={1500} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- VIEW 8: Timeline View ---
+function TimelineView({ data }) {
+  const timelineData = useMemo(() => {
+    const grouped = data.reduce((acc, entry) => {
+      if (!acc[entry.date]) acc[entry.date] = [];
+      acc[entry.date].push(entry);
+      return acc;
+    }, {});
+    return Object.entries(grouped).sort((a, b) => new Date(b[0]) - new Date(a[0])).slice(0, 14); // Last 14 active days
+  }, [data]);
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-12">
+      <div className="text-center mb-8">
+        <h2 className="text-3xl font-bold text-slate-800 dark:text-white flex items-center justify-center gap-3">
+          <GitCommit className="text-indigo-500" size={32} /> Historical Timeline
+        </h2>
+        <p className="text-slate-500 dark:text-slate-400 mt-2">Chronological feed of team updates over the last 14 days.</p>
+      </div>
+
+      <div className="relative border-l-2 border-indigo-200 dark:border-indigo-800/50 ml-4 md:ml-8 space-y-10">
+        {timelineData.map(([date, entries], index) => (
+          <div key={date} className="relative pl-8 md:pl-12 animate-in slide-in-from-bottom-8 fill-mode-both" style={{ animationDelay: `${index * 100}ms` }}>
+            <div className="absolute -left-[9px] top-1 w-4 h-4 bg-indigo-500 rounded-full ring-4 ring-white dark:ring-slate-900 shadow-sm"></div>
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4 bg-white dark:bg-slate-800 inline-block px-4 py-1.5 rounded-full shadow-sm border border-slate-100 dark:border-slate-700">
+              {formatDate(date)}
+            </h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+              {entries.map(entry => (
+                <div key={entry.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center font-bold text-xs text-slate-600 dark:text-slate-300">
+                        {entry.userName.charAt(0)}
+                      </div>
+                      <span className="font-bold text-slate-700 dark:text-slate-200 text-sm">{entry.userName}</span>
+                    </div>
+                    {entry.status === 'LEAVE' ? (
+                      <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold">LEAVE</span>
+                    ) : (
+                      <span className="text-xs text-slate-500 font-medium">{entry.todayActuals?.length || 0} tasks</span>
+                    )}
+                  </div>
+                  {entry.status !== 'LEAVE' && (
+                    <ul className="space-y-1.5">
+                      {(entry.todayActuals || []).slice(0, 3).map((t, i) => (
+                        <li key={i} className="text-sm text-slate-600 dark:text-slate-400 truncate flex items-center gap-2">
+                          <CheckCircle2 size={12} className={t.status === 'Completed' ? 'text-green-500' : 'text-slate-400'}/> {t.task}
+                        </li>
+                      ))}
+                      {(entry.todayActuals?.length > 3) && (
+                        <li className="text-xs text-indigo-500 font-medium italic mt-1">+ {entry.todayActuals.length - 3} more</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
