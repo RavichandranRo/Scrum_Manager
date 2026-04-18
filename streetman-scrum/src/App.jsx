@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   LayoutDashboard, PlusCircle, Users, FileSpreadsheet, Copy, Mail, MessageSquare,
   LogOut, X, ChevronDown, CheckCircle2, AlertTriangle, Lock, ShieldCheck, UserCog,
-  Clock, CalendarCheck, WifiOff, CloudLightning, Database, RefreshCw, Send,
-  User, ExternalLink, Download, Bell, Coffee, History
+  Clock, CalendarCheck, WifiOff, CloudLightning, Database, RefreshCw, Send, Activity,
+  Calendar, Tag, Trash2, Edit3, User, ExternalLink, Download, Bell, Coffee, History, Search, Filter
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
@@ -17,7 +17,7 @@ const appId = "streetman-scrum-automation";
 const BACKEND_URL = 'http://192.168.26.210:3001';
 
 // --- TEAM CONFIGURATION ---
-const PROJECTS = ['SMNGUI', 'Hardware', 'Core', 'SNC', 'AWS', 'CST'];
+const PROJECTS = ['SMNGUI', 'Hardware', 'Core', 'SandC', 'AWS', 'CST'];
 const MEMBER_TEAMS = ['StreetMan QA', 'StreetMan Dev', 'Hardware', 'StreetMan NexGen Dev'];
 
 // PROJECT MAPPING FOR EXPORT
@@ -25,7 +25,7 @@ const PROJECT_CATEGORIES = {
   'Hardware': 'Hardware',
   'SMNGUI': 'SMNGUI',
   'Core': 'Core',
-  'SNC': 'SNC',
+  'SandC': 'SandC',
   'AWS': 'AWS',
   'CST': 'CST'
 };
@@ -38,14 +38,14 @@ const JIRA_PATTERN = /[A-Z]{2,}-\d+/g;
 const DEFAULT_USERS = [
   { id: '1349', name: 'Ravichandran C', team: 'StreetMan QA', role: 'ADMIN', pin: '1349' },
   { id: '1253', name: 'Keerthana M', team: 'StreetMan QA', role: 'MEMBER', pin: '1253' },
-  { id: '1266', name: 'Manirathinam S', team: 'StreetMan QA', role: 'MEMBER', pin: '1266' },
+  { id: '1266', name: 'Mani Rathinam S', team: 'StreetMan QA', role: 'MEMBER', pin: '1266' },
   { id: '1252', name: 'Karthika S', team: 'StreetMan QA', role: 'MEMBER', pin: '1252' },
   { id: '1342', name: 'Vignesh S', team: 'StreetMan QA', role: 'MEMBER', pin: '1342' },
   { id: '1220', name: 'Shanmugam S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1220' },
-  { id: '1312', name: 'Keerthana S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1312' },
+  { id: '1312', name: 'Keerthana Sharavanan', team: 'StreetMan Dev', role: 'MEMBER', pin: '1312' },
   { id: '1316', name: 'Gobi S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1316' },
-  { id: '1335', name: 'Surendar S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1335' },
-  { id: '1345', name: 'Nithishkumar M', team: 'StreetMan Dev', role: 'MEMBER', pin: '1345' },
+  { id: '1335', name: 'Surendhar S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1335' },
+  { id: '1345', name: 'Nithish Kumar M', team: 'StreetMan Dev', role: 'MEMBER', pin: '1345' },
   { id: '1341', name: 'Thinakaran S', team: 'StreetMan Dev', role: 'MEMBER', pin: '1341' },
   { id: '1363', name: 'Balamurugan B', team: 'Hardware', role: 'MEMBER', pin: '1363' },
   { id: '1299', name: 'Kanishka V R', team: 'StreetMan NexGen Dev', role: 'MEMBER', pin: '1299' },
@@ -515,15 +515,23 @@ export default function App() {
     reminderTriggers: {}
   }), []);
   const systemDataRef = useRef(defaultSystemData);
-  const mergeSystemData = (incoming) => ({
-    ...defaultSystemData,
-    ...systemDataRef.current,
-    ...(incoming || {})
-  });
+  const mergeSystemData = (incoming) => {
+    const inc = incoming || {};
+    return {
+      ...defaultSystemData,
+      ...systemDataRef.current,
+      ...inc,
+      appConfig: {
+        ...defaultSystemData.appConfig,
+        ...(systemDataRef.current?.appConfig || {}),
+        ...(inc.appConfig || {})
+      }
+    };
+  };
 
   const normalizeSystemData = (raw) => {
     if (!raw) return null;
-    if (Array.isArray(raw)) return raw[0] || null;
+    if (Array.isArray(raw)) return raw[raw.length - 1] || null;
     if (raw[SYSTEM_DATA_STORAGE_KEY]) return raw[SYSTEM_DATA_STORAGE_KEY];
     if (raw.value && typeof raw.value === 'object') return raw.value;
     if (raw.data && typeof raw.data === 'object') return raw.data;
@@ -533,6 +541,9 @@ export default function App() {
   const syncSystemData = async (payload) => {
     const mergedPayload = mergeSystemData(payload);
     systemDataRef.current = mergedPayload;
+    try {
+      localStorage.setItem('scrum_system_data_backup', JSON.stringify(mergedPayload));
+    } catch(e) {}
     try {
       await fetch(`${BACKEND_URL}/api/system-data`, {
         method: 'POST',
@@ -553,7 +564,7 @@ export default function App() {
   const setAppConfig = (value) => {
     setAppConfigState(prev => {
       const newConfig = typeof value === 'function' ? value(prev) : value;
-      syncSystemData({ appConfig: newConfig });
+      setTimeout(() => syncSystemData({ appConfig: newConfig }), 0);
       return newConfig;
     });
   };
@@ -563,7 +574,7 @@ export default function App() {
   const setAuditLogs = (value) => {
     setAuditLogsState(prev => {
       const newLogs = typeof value === 'function' ? value(prev) : value;
-      syncSystemData({ auditLogs: newLogs });
+      setTimeout(() => syncSystemData({ auditLogs: newLogs }), 0);
       return newLogs;
     });
   };
@@ -573,8 +584,7 @@ export default function App() {
   const setUsers = (value) => {
     setUsersState(prev => {
       const newUsers = typeof value === 'function' ? value(prev) : value;
-      localStorage.setItem(CUSTOM_USERS_STORAGE_KEY, JSON.stringify(customUsers));
-      syncSystemData({ users: newUsers });
+      setTimeout(() => syncSystemData({ users: newUsers }), 0);
       return newUsers;
     });
   };
@@ -583,7 +593,7 @@ export default function App() {
   const setCustomProjects = (value) => {
     setCustomProjectsState(prev => {
       const newProjects = typeof value === 'function' ? value(prev) : value;
-      syncSystemData({ customProjects: newProjects });
+      setTimeout(() => syncSystemData({ customProjects: newProjects }), 0);
       return newProjects;
     });
   };
@@ -592,7 +602,7 @@ export default function App() {
   const setTeamsReminderConfig = (value) => {
     setTeamsReminderConfigState(prev => {
       const newConfig = typeof value === 'function' ? value(prev) : value;
-      syncSystemData({ teamsReminderConfig: newConfig });
+      setTimeout(() => syncSystemData({ teamsReminderConfig: newConfig }), 0);
       return newConfig;
     });
   };
@@ -693,24 +703,48 @@ export default function App() {
     const fetchSystemData = async () => {
       try {
         const res = await fetch(`${BACKEND_URL}/api/system-data`);
-        if (!res.ok) return;
-        const rawData = await res.json();
-        const normalized = normalizeSystemData(rawData);
+        let normalized = null;
+        if (res.ok) {
+           const rawData = await res.json();
+           normalized = normalizeSystemData(rawData);
+        }
+        
+        if (!normalized || Object.keys(normalized).length === 0) {
+           const localBackup = localStorage.getItem('scrum_system_data_backup');
+           if (localBackup) normalized = JSON.parse(localBackup);
+        } else {
+           // Prevent server restart from wiping out SM assignment
+           const localBackupStr = localStorage.getItem('scrum_system_data_backup');
+           if (localBackupStr) {
+               const localBackup = JSON.parse(localBackupStr);
+               const serverSmId = normalized.appConfig?.currentScrumMasterId;
+               const defaultSmId = defaultSystemData.appConfig.currentScrumMasterId;
+               const localSmId = localBackup?.appConfig?.currentScrumMasterId;
+               
+               if ((!serverSmId || serverSmId === defaultSmId) && localSmId && localSmId !== defaultSmId) {
+                   if (!normalized.appConfig) normalized.appConfig = {};
+                   normalized.appConfig.currentScrumMasterId = localSmId;
+               }
+               // Also recover custom projects if server lost them
+               if ((!normalized.customProjects || normalized.customProjects.length === 0) && localBackup.customProjects?.length > 0) {
+                   normalized.customProjects = localBackup.customProjects;
+               }
+           }
+        }
+
         const merged = {
           ...defaultSystemData,
-          ...(normalized || {})
+          ...(normalized || {}),
+          appConfig: {
+            ...defaultSystemData.appConfig,
+            ...(normalized?.appConfig || {})
+          }
         };
 
         systemDataRef.current = mergeSystemData(merged);
 
         if (merged.appConfig?.currentScrumMasterId) {
-          setAppConfigState((prev) => {
-            if (prev.currentScrumMasterId === merged.appConfig.currentScrumMasterId) return prev;
-            return {
-              ...prev,
-              ...merged.appConfig
-            };
-          });
+          setAppConfigState(prev => prev.currentScrumMasterId === merged.appConfig.currentScrumMasterId ? prev : { ...prev, ...merged.appConfig });
         }
 
         if (Array.isArray(merged.auditLogs)) setAuditLogsState(merged.auditLogs);
@@ -720,6 +754,27 @@ export default function App() {
         if (merged.reminderTriggers && typeof merged.reminderTriggers === 'object') setReminderTriggersState(merged.reminderTriggers);
       } catch (err) {
         console.warn("Could not fetch /api/system-data", err);
+        const localBackup = localStorage.getItem('scrum_system_data_backup');
+        if (localBackup) {
+           const normalized = JSON.parse(localBackup);
+           const merged = {
+             ...defaultSystemData,
+             ...normalized,
+             appConfig: {
+               ...defaultSystemData.appConfig,
+               ...(normalized?.appConfig || {})
+             }
+           };
+           systemDataRef.current = mergeSystemData(merged);
+           if (merged.appConfig?.currentScrumMasterId) {
+             setAppConfigState(prev => prev.currentScrumMasterId === merged.appConfig.currentScrumMasterId ? prev : { ...prev, ...merged.appConfig });
+           }
+           if (Array.isArray(merged.auditLogs)) setAuditLogsState(merged.auditLogs);
+           if (Array.isArray(merged.users) && merged.users.length > 0) setUsersState(merged.users);
+           if (Array.isArray(merged.customProjects)) setCustomProjectsState(merged.customProjects);
+           if (merged.teamsReminderConfig) setTeamsReminderConfigState(merged.teamsReminderConfig);
+           if (merged.reminderTriggers) setReminderTriggersState(merged.reminderTriggers);
+        }
       }
     };
 
@@ -980,7 +1035,7 @@ export default function App() {
               markReminderTriggered={markReminderTriggered}
             />
           )}
-          {activeTab === 'reports' && (isScrumMaster || isAdmin) && <ReportsView data={statusData} showNotification={showNotification} />}
+          {activeTab === 'reports' && (isScrumMaster || isAdmin) && <ReportsView data={statusData} showNotification={showNotification} users={usersState} />}
           {activeTab === 'logs' && (isScrumMaster || isAdmin) && <AuditLogsView data={auditLogsState} showNotification={showNotification} />}
           {activeTab === 'admin' && isAdmin && (
             <AdminView
@@ -1054,19 +1109,32 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
   const { isDayStartOpen, isDayEndOpen } = checkTimeWindows(inputDate);
 
   const existingEntry = existingData.find(d => d.date === inputDate && d.userId === currentUserProfile.id);
-  const previousDate = getPreviousDateString(inputDate);
-  const previousEntry = existingData.find(d => d.date === previousDate && d.userId === currentUserProfile.id);
+  const previousEntry = existingData.filter(d => d.userId === currentUserProfile.id && d.date < inputDate).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
   const isUpdateMode = !!existingEntry;
   const isOnLeave = existingEntry?.status === 'LEAVE';
+  
+  const isKarthika = currentUserProfile.name === 'Karthika S';
+  const [showNextDay, setShowNextDay] = useState(false);
 
   const [formData, setFormData] = useState({
     yesterdayWork: [],
     todayPlan: [],
-    todayActuals: []
+    todayActuals: [],
+    nextDayPlan: []
   });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
-  const projectOptions = useMemo(() => PROJECT_OPTIONS, []);
+  
+  const allProjectOptions = useMemo(() => {
+    const base = [...PROJECT_OPTIONS];
+    const custom = (customProjects || []).filter(p => !base.includes(p));
+    const othersIdx = base.indexOf('Others');
+    if (othersIdx > -1) {
+      base.splice(othersIdx, 0, ...custom);
+      return base;
+    }
+    return [...base, ...custom];
+  }, [customProjects]);
 
   const createTaskItem = (section) => ({
     task: '',
@@ -1099,7 +1167,12 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
     newTasks.forEach((task, idx) => {
       task.task = items[idx + 1];
     });
-    setFormData({ ...formData, [section]: [...currentSection.slice(0, index + 1), ...newTasks, ...currentSection.slice(index + 1)] });
+    const newSection = [...currentSection.slice(0, index + 1), ...newTasks, ...currentSection.slice(index + 1)];
+    let newFormData = { ...formData, [section]: newSection };
+    if (section === 'todayPlan' && !isDayEndOpen) {
+      newFormData.todayActuals = newSection.map(p => ({ ...p, status: 'Completed', isBlocked: false, blockerReason: '' }));
+    }
+    setFormData(newFormData);
   };
 
   useEffect(() => {
@@ -1124,12 +1197,13 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 
     const formatLoadedTask = (t, isActuals = false) => {
       const parsedTime = parseTime(isActuals ? (t.actualTime || t.time) : t.time);
+      const isKnownProject = allProjectOptions.includes(t.project);
       return {
         ...t,
         hours: parsedTime.hours,
         minutes: parsedTime.minutes,
-        project: t.project || '',
-        customProject: t.project === 'Others' ? (t.customProject || '') : '',
+        project: isKnownProject ? t.project : (t.project ? 'Others' : ''),
+        customProject: !isKnownProject && t.project ? t.project : '',
         jiraId: t.jiraId || extractJiraId(t.task),
         isBlocked: !!(t.blockerReason && t.blockerReason.trim().length > 0)
       };
@@ -1146,10 +1220,15 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
             status: 'Completed',
             isBlocked: false,
             blockerReason: ''
-          }))
+          })),
+        nextDayPlan: (existingEntry.nextDayPlan || []).map(t => formatLoadedTask(t, false))
       });
+      setShowNextDay(!!existingEntry.nextDayPlan && existingEntry.nextDayPlan.length > 0);
     } else {
-      const autoYesterday = (previousEntry?.todayActuals || [])
+        const prevActuals = previousEntry?.todayActuals?.length > 0 
+          ? previousEntry.todayActuals 
+          : (previousEntry?.todayPlan || []);
+        const autoYesterday = prevActuals
         .filter((task) => (task.task || '').trim())
         .map((t) => ({
           ...formatLoadedTask(t, true),
@@ -1158,14 +1237,20 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
           blockerReason: ''
         }));
 
+      const autoToday = (previousEntry?.nextDayPlan || [])
+        .filter(task => (task.task || '').trim())
+        .map(t => formatLoadedTask(t, false));
+
       setFormData({
         yesterdayWork: autoYesterday.length > 0 ? autoYesterday : [createTaskItem('yesterdayWork')],
-        todayPlan: [createTaskItem('todayPlan')],
-        todayActuals: []
+        todayPlan: autoToday.length > 0 ? autoToday : [createTaskItem('todayPlan')],
+        todayActuals: [],
+        nextDayPlan: existingEntry?.nextDayPlan?.length > 0 ? existingEntry.nextDayPlan.map(t => formatLoadedTask(t, false)) : [createTaskItem('nextDayPlan')]
       });
+      setShowNextDay(false);
     }
     setLoading(false);
-  }, [existingEntry, previousEntry, currentUserProfile.id, inputDate, isDirty]);
+  }, [existingEntry, previousEntry, currentUserProfile.id, inputDate, isDirty, allProjectOptions]);
 
   const handleTaskChange = (section, index, field, value) => {
     setIsDirty(true);
@@ -1177,12 +1262,22 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
     if (field === 'project' && value !== 'Others') {
       newSection[index].customProject = '';
     }
-    setFormData({ ...formData, [section]: newSection });
+    
+    let newFormData = { ...formData, [section]: newSection };
+    if (section === 'todayPlan' && !isDayEndOpen) {
+      newFormData.todayActuals = newSection.map(p => ({ ...p, status: 'Completed', isBlocked: false, blockerReason: '' }));
+    }
+    setFormData(newFormData);
   };
 
   const addTask = (section) => {
     setIsDirty(true);
-    setFormData({ ...formData, [section]: [...formData[section], createTaskItem(section)] });
+    const newSection = [...formData[section], createTaskItem(section)];
+    let newFormData = { ...formData, [section]: newSection };
+    if (section === 'todayPlan' && !isDayEndOpen) {
+      newFormData.todayActuals = newSection.map(p => ({ ...p, status: 'Completed', isBlocked: false, blockerReason: '' }));
+    }
+    setFormData(newFormData);
   };
 
   const removeTask = (section, index) => {
@@ -1192,7 +1287,11 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
     }
     setIsDirty(true);
     const newSection = formData[section].filter((_, i) => i !== index);
-    setFormData({ ...formData, [section]: newSection });
+    let newFormData = { ...formData, [section]: newSection };
+    if (section === 'todayPlan' && !isDayEndOpen) {
+      newFormData.todayActuals = newSection.map(p => ({ ...p, status: 'Completed', isBlocked: false, blockerReason: '' }));
+    }
+    setFormData(newFormData);
   };
 
   const handleSubmit = async (e) => {
@@ -1237,6 +1336,19 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 
       return payload;
     };
+    
+    const newCustomProjects = new Set(customProjects || []);
+    const checkCustom = (t) => {
+      if (t.project === 'Others' && t.customProject?.trim()) newCustomProjects.add(t.customProject.trim());
+      else if (t.project && !allProjectOptions.includes(t.project)) newCustomProjects.add(t.project.trim());
+    };
+    formData.yesterdayWork.forEach(checkCustom);
+    formData.todayPlan.forEach(checkCustom);
+    formData.todayActuals.forEach(checkCustom);
+    if (isKarthika && showNextDay) formData.nextDayPlan.forEach(checkCustom);
+    if (newCustomProjects.size > (customProjects || []).length) {
+      setCustomProjects(Array.from(newCustomProjects));
+    }
 
     try {
       const payload = {
@@ -1248,6 +1360,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
         yesterdayWork: formData.yesterdayWork.map(t => formatSavedTask(t, false)),
         todayPlan: formData.todayPlan.map(t => formatSavedTask(t, false)),
         todayActuals: isUpdateMode ? formData.todayActuals.map(t => formatSavedTask(t, true)) : [],
+        nextDayPlan: (isKarthika && showNextDay) ? formData.nextDayPlan.map(t => formatSavedTask(t, false)) : undefined,
         approved: false,
         updatedAt: now
       };
@@ -1294,7 +1407,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 
   if (isOnLeave) {
     return (
-      <div className="max-w-xl mx-auto mt-20 text-center p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg border-2 border-amber-100 dark:border-amber-900/50">
+      <div className="max-w-xl mx-auto mt-20 text-center p-8 bg-white dark:bg-slate-800 rounded-xl shadow-lg border-2 border-amber-100 dark:border-amber-900/50 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <Coffee size={64} className="mx-auto text-amber-500 mb-4" />
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white">You are marked as On Leave</h2>
         <p className="text-slate-500 dark:text-slate-400 mt-2">Enjoy your time off! No status updates required for this day.</p>
@@ -1304,7 +1417,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 
   // Expanded Container Width
   return (
-    <div className="max-w-7xl mx-auto w-full">
+    <div className="max-w-7xl mx-auto w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-white dark:bg-slate-800 shadow-xl rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
         <div className="bg-slate-50 dark:bg-slate-700/50 px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
           <div>
@@ -1334,7 +1447,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
             </div>
           )}
 
-          <div className={`space-y-4 rounded-2xl p-6 border-2 shadow-md transition-all duration-300 card-elevation ${!isDayStartOpen ? 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 opacity-70' : 'bg-gradient-to-br from-blue-50 to-blue-50/50 dark:from-blue-900/10 dark:to-slate-900/20 border-blue-200 dark:border-blue-800/40'}`}>
+          <div className={`space-y-4 rounded-2xl p-6 border-2 shadow-md transition-all duration-300 hover:scale-[1.01] card-elevation ${!isDayStartOpen ? 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 opacity-70' : 'bg-gradient-to-br from-blue-50 to-blue-50/50 dark:from-blue-900/10 dark:to-slate-900/20 border-blue-200 dark:border-blue-800/40'}`}>
             <div className="flex items-center justify-between border-b border-slate-300 dark:border-slate-600 pb-2">
               <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 1. Day Start Plan
@@ -1345,11 +1458,11 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mt-2">Yesterday's Work</p>
             {formData.yesterdayWork.map((item, idx) => (
-              <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12">
+              <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12 animate-in slide-in-from-left-4 duration-300">
                 <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="What did you finish?" value={item.task} onPaste={(e) => handleTaskPaste('yesterdayWork', idx, e)} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
                 <select disabled={!isDayStartOpen} value={item.project} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
                   <option value="" disabled>Select project</option>
-                  {projectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                  {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
                 </select>
                 {item.project === 'Others' && (
                   <input
@@ -1386,11 +1499,11 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
               {isDayStartOpen && <button type="button" onClick={() => addTask('todayPlan')} className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95"><PlusCircle size={16} /> Add Plan Item</button>}
             </div>
             {formData.todayPlan.map((item, idx) => (
-              <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12">
+              <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12 animate-in slide-in-from-left-4 duration-300">
                 <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="Planned task..." value={item.task} onPaste={(e) => handleTaskPaste('todayPlan', idx, e)} onChange={(e) => handleTaskChange('todayPlan', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
                 <select disabled={!isDayStartOpen} value={item.project} onChange={(e) => handleTaskChange('todayPlan', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
                   <option value="" disabled>Select project</option>
-                  {projectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                  {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
                 </select>
                 {item.project === 'Others' && (
                   <input
@@ -1424,7 +1537,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
           </div>
 
           {isUpdateMode && (
-            <div className={`space-y-4 rounded-2xl p-6 border-2 shadow-md transition-all duration-300 card-elevation ${!isDayEndOpen ? 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 opacity-70' : 'bg-gradient-to-br from-green-50 to-green-50/50 dark:from-green-900/10 dark:to-slate-900/20 border-green-200 dark:border-green-800/40'}`}>
+            <div className={`space-y-4 rounded-2xl p-6 border-2 shadow-md transition-all duration-300 hover:scale-[1.01] card-elevation ${!isDayEndOpen ? 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 opacity-70' : 'bg-gradient-to-br from-green-50 to-green-50/50 dark:from-green-900/10 dark:to-slate-900/20 border-green-200 dark:border-green-800/40'}`}>
               <div className="flex items-center justify-between border-b border-slate-300 dark:border-slate-600 pb-2">
                 <h3 className="text-lg font-bold text-green-900 dark:text-green-400 flex items-center gap-2">
                   2. Day End Actuals
@@ -1434,11 +1547,11 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
               </div>
 
               {formData.todayActuals.map((item, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-4 rounded-xl border border-green-200 dark:border-green-800/50 relative pr-12 shadow-sm hover:shadow-md transition-all duration-200 hover:border-green-300 dark:hover:border-green-600">
+                <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-4 rounded-xl border border-green-200 dark:border-green-800/50 relative pr-12 shadow-sm hover:shadow-md transition-all duration-200 hover:border-green-300 dark:hover:border-green-600 animate-in slide-in-from-left-4 duration-300">
                   <AutoResizeTextarea disabled={!isDayEndOpen} placeholder="Actual task done" value={item.task} onPaste={(e) => handleTaskPaste('todayActuals', idx, e)} onChange={(e) => handleTaskChange('todayActuals', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} />
                   <select disabled={!isDayEndOpen} value={item.project} onChange={(e) => handleTaskChange('todayActuals', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`}>
                     <option value="" disabled>Select project</option>
-                    {projectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                    {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
                   </select>
                   {item.project === 'Others' && (
                     <input
@@ -1484,6 +1597,44 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
             </div>
           )}
 
+          {isKarthika && (
+            <div className={`space-y-4 rounded-2xl p-6 border-2 shadow-md transition-all duration-300 hover:scale-[1.01] card-elevation bg-purple-50/50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800/40`}>
+              <div className="flex items-center justify-between border-b border-purple-200 dark:border-purple-800/60 pb-2">
+                <h3 className="text-lg font-bold text-purple-900 dark:text-purple-400 flex items-center gap-2">
+                  3. Next Day's Status
+                </h3>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-purple-700 dark:text-purple-300 cursor-pointer">
+                    <input type="checkbox" checked={showNextDay} onChange={e => setShowNextDay(e.target.checked)} className="rounded border-purple-300 text-purple-600 focus:ring-purple-500 bg-white dark:bg-slate-800 w-4 h-4"/>
+                    Would you like to add next day's status?
+                  </label>
+                  {showNextDay && <button type="button" onClick={() => addTask('nextDayPlan')} className="inline-flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-bold hover:bg-purple-100 dark:hover:bg-purple-900/40 px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95"><PlusCircle size={16} /> Add Plan Item</button>}
+                </div>
+              </div>
+
+              {showNextDay && formData.nextDayPlan.map((item, idx) => (
+                <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-purple-200 dark:border-purple-700 relative pr-12 transition-all animate-in slide-in-from-left-4 duration-300">
+                  <AutoResizeTextarea placeholder="Next day's planned task..." value={item.task} onPaste={(e) => handleTaskPaste('nextDayPlan', idx, e)} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
+                  <select value={item.project} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
+                    <option value="" disabled>Select project</option>
+                    {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                  </select>
+                  {item.project === 'Others' && (
+                    <input type="text" value={item.customProject} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'customProject', e.target.value)} placeholder="Specify project" className={`w-40 ${inputBase}`} required />
+                  )}
+                  {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
+                    <input type="text" placeholder="JIRA ID" value={item.jiraId || ''} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'jiraId', e.target.value.toUpperCase())} className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`} title="JIRA ID" />
+                  )}
+                  <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('nextDayPlan', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('nextDayPlan', idx, 'minutes', e.target.value)} disabled={false} />
+                  <select value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
+                    <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
+                  </select>
+                  <button type="button" onClick={() => removeTask('nextDayPlan', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-4">
             <button
               type="submit"
@@ -1524,7 +1675,11 @@ function DashboardView({
     to: 'smscrum@dhyan.com'
   });
 
-  const dailyData = useMemo(() => data.filter(d => d.date === selectedDate), [data, selectedDate]);
+  const dailyData = useMemo(() => {
+    return data
+      .filter(d => d.date === selectedDate)
+      .sort((a, b) => (a.userName || '').localeCompare(b.userName || ''));
+  }, [data, selectedDate]);
 
   const missingUsers = useMemo(() => {
     const submittedIds = dailyData.map(d => d.userId);
@@ -2000,7 +2155,7 @@ if __name__ == '__main__':
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row justify-between gap-4 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
@@ -2050,8 +2205,8 @@ if __name__ == '__main__':
       {isManagerView && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Daily Status Card */}
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-900/10 p-4 rounded-xl border border-blue-200 dark:border-blue-700 shadow-sm">
-            <p className="text-xs text-blue-700 dark:text-blue-300 font-semibold uppercase tracking-wide">Daily Submissions</p>
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/40 dark:to-blue-900/10 p-5 rounded-2xl border border-blue-200 dark:border-blue-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+            <p className="text-xs text-blue-700 dark:text-blue-300 font-semibold uppercase tracking-wide flex items-center gap-1.5"><Users size={14} /> Daily Submissions</p>
             <div className="flex items-center gap-3 mt-3">
               <div className="text-3xl font-bold text-blue-700 dark:text-blue-400">{dailyData.filter(d => d.status !== 'LEAVE').length}/{users.filter(u => u.role !== 'ADMIN').length}</div>
               <div className="text-right">
@@ -2064,8 +2219,8 @@ if __name__ == '__main__':
           </div>
 
           {/* Approval Status */}
-          <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-900/10 p-4 rounded-xl border border-green-200 dark:border-green-700 shadow-sm">
-            <p className="text-xs text-green-700 dark:text-green-300 font-semibold uppercase tracking-wide">Approved Today</p>
+          <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/40 dark:to-green-900/10 p-5 rounded-2xl border border-green-200 dark:border-green-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+            <p className="text-xs text-green-700 dark:text-green-300 font-semibold uppercase tracking-wide flex items-center gap-1.5"><ShieldCheck size={14} /> Approved Today</p>
             <div className="flex items-center gap-3 mt-3">
               <div className="text-3xl font-bold text-green-700 dark:text-green-400">{dailyData.filter(d => d.approved && d.status !== 'LEAVE').length}</div>
               <div className="text-right">
@@ -2076,8 +2231,8 @@ if __name__ == '__main__':
           </div>
 
           {/* Tasks Submitted */}
-          <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-900/10 p-4 rounded-xl border border-orange-200 dark:border-orange-700 shadow-sm">
-            <p className="text-xs text-orange-700 dark:text-orange-300 font-semibold uppercase tracking-wide">Tasks Captured</p>
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/40 dark:to-orange-900/10 p-5 rounded-2xl border border-orange-200 dark:border-orange-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+            <p className="text-xs text-orange-700 dark:text-orange-300 font-semibold uppercase tracking-wide flex items-center gap-1.5"><CheckCircle2 size={14} /> Tasks Captured</p>
             <div className="flex items-center gap-3 mt-3">
               <div className="text-3xl font-bold text-orange-700 dark:text-orange-400">
                 {dailyData.reduce((sum, d) => sum + ((d.todayActuals || []).length || 0), 0)}
@@ -2090,8 +2245,8 @@ if __name__ == '__main__':
           </div>
 
           {/* Blockers */}
-          <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-900/10 p-4 rounded-xl border border-red-200 dark:border-red-700 shadow-sm">
-            <p className="text-xs text-red-700 dark:text-red-300 font-semibold uppercase tracking-wide">Active Blockers</p>
+          <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/40 dark:to-red-900/10 p-5 rounded-2xl border border-red-200 dark:border-red-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+            <p className="text-xs text-red-700 dark:text-red-300 font-semibold uppercase tracking-wide flex items-center gap-1.5"><AlertTriangle size={14} /> Active Blockers</p>
             <div className="flex items-center gap-3 mt-3">
               <div className="text-3xl font-bold text-red-700 dark:text-red-400">
                 {dailyData.reduce((sum, d) => sum + ((d.todayActuals || []).filter(t => t.status === 'Blocked').length || 0), 0)}
@@ -2107,17 +2262,17 @@ if __name__ == '__main__':
 
       {isManagerView && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
             <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Weekly submission rate</p>
             <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-400 mt-1">{weeklyTrend.submittedPct.toFixed(1)}%</p>
           </div>
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
             <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Avg planned vs actual</p>
             <p className="text-sm mt-2 text-slate-700 dark:text-slate-300">
               Planned: <strong>{weeklyTrend.avgPlannedHours.toFixed(2)}h</strong> | Actual: <strong>{weeklyTrend.avgActualHours.toFixed(2)}h</strong>
             </p>
           </div>
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
             <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Top blockers (weekly)</p>
             <ul className="mt-2 text-sm text-slate-700 dark:text-slate-300 list-disc pl-5">
               {weeklyTrend.topBlockers.length === 0 && <li>No blocker reasons captured</li>}
@@ -2187,45 +2342,70 @@ if __name__ == '__main__':
                         {isLeave ? '-' : row ? (
                           <div className="space-y-2">
                             <div>
-                              <p className="text-[11px] uppercase font-bold text-slate-400 dark:text-slate-500">Yesterday</p>
-                              <ul className="list-disc pl-4 space-y-1">
+                              <p className="text-[11px] uppercase font-bold text-slate-400 dark:text-slate-500 mb-1.5">Yesterday</p>
+                              <ul className="list-none pl-0 space-y-2">
                                 {(row.yesterdayWork || []).map((t, i) => (
-                                  <li key={i}>
-                                    {t.task}
-                                    <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
-                                    {t.blockerReason ? <span className="text-xs text-red-500 dark:text-red-400"> - {t.blockerReason}</span> : null}
+                                  <li key={i} className="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-lg border border-slate-200 dark:border-slate-600/50 flex flex-col gap-1.5 hover:shadow-md transition-shadow">
+                                    <span className="font-medium text-slate-700 dark:text-slate-200 text-sm leading-snug">{t.task}</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 px-2 py-0.5 rounded-full">{t.project || '-'}</span>
+                                      <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full flex items-center gap-1"><Clock size={10} /> {t.time}</span>
+                                      {t.priority && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${t.priority === 'High' || t.priority === 'Critical' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-300'}`}>{t.priority}</span>}
+                                    </div>
+                                    {t.blockerReason && <div className="mt-1 text-xs text-red-600 dark:text-red-400 flex items-start gap-1.5 bg-red-50 dark:bg-red-900/20 p-2 rounded"><AlertTriangle size={14} className="shrink-0" /> <span className="leading-tight">{t.blockerReason}</span></div>}
                                   </li>
                                 ))}
                               </ul>
                             </div>
                             <div>
-                              <p className="text-[11px] uppercase font-bold text-slate-400 dark:text-slate-500">Today's Plan</p>
-                              <ul className="list-disc pl-4 space-y-1">
+                              <p className="text-[11px] uppercase font-bold text-slate-400 dark:text-slate-500 mt-3 mb-1.5">Today's Plan</p>
+                              <ul className="list-none pl-0 space-y-2">
                                 {(row.todayPlan || []).map((t, i) => (
-                                  <li key={i}>
-                                    {t.task}
-                                    <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.time} • {t.priority || 'Medium'})</span>
-                                    {t.blockerReason ? <span className="text-xs text-red-500 dark:text-red-400"> - {t.blockerReason}</span> : null}
+                                  <li key={i} className="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-lg border border-slate-200 dark:border-slate-600/50 flex flex-col gap-1.5 hover:shadow-md transition-shadow">
+                                    <span className="font-medium text-slate-700 dark:text-slate-200 text-sm leading-snug">{t.task}</span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 px-2 py-0.5 rounded-full">{t.project || '-'}</span>
+                                      <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full flex items-center gap-1"><Clock size={10} /> {t.time}</span>
+                                      {t.priority && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${t.priority === 'High' || t.priority === 'Critical' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400' : 'bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-300'}`}>{t.priority}</span>}
+                                    </div>
+                                    {t.blockerReason && <div className="mt-1 text-xs text-red-600 dark:text-red-400 flex items-start gap-1.5 bg-red-50 dark:bg-red-900/20 p-2 rounded"><AlertTriangle size={14} className="shrink-0" /> <span className="leading-tight">{t.blockerReason}</span></div>}
                                   </li>
                                 ))}
                               </ul>
                             </div>
                           </div>
-                        ) : <span className="text-xs text-slate-300 dark:text-slate-600 italic">Not Submitted</span>}
+                        ) : (
+                          <div className="flex flex-col items-center justify-center p-4 text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 w-full min-h-[100px]">
+                            <Clock size={20} className="mb-1 opacity-50" />
+                            <span className="text-[10px] font-semibold uppercase tracking-wider">Pending Update</span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-300">
                         {isLeave ? '-' : row ? (
-                          <ul className="list-disc pl-4 space-y-1">
-                            {(row.todayActuals || []).length === 0 && <li className="text-xs text-slate-400 list-none">No day-end actuals captured</li>}
+                          <ul className="list-none pl-0 space-y-2">
+                            {(row.todayActuals || []).length === 0 && <li className="text-xs text-slate-400 dark:text-slate-500 italic p-3 text-center bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">No day-end actuals captured</li>}
                             {(row.todayActuals || []).map((t, i) => (
-                              <li key={i}>
-                                {t.task}
-                                <span className="text-xs text-slate-400"> ({t.project || '-'} • {t.actualTime || t.time || '-'} • {t.priority || 'Medium'} • {t.status || 'Completed'})</span>
-                                {t.blockerReason ? <span className="text-xs text-red-500 dark:text-red-400"> - {t.blockerReason}</span> : null}
+                              <li key={i} className="bg-slate-50 dark:bg-slate-700/30 p-2.5 rounded-lg border border-slate-200 dark:border-slate-600/50 flex flex-col gap-1.5 hover:shadow-md transition-shadow">
+                                <span className="font-medium text-slate-700 dark:text-slate-200 text-sm leading-snug">{t.task}</span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 px-2 py-0.5 rounded-full">{t.project || '-'}</span>
+                                  <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 dark:bg-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full flex items-center gap-1"><Clock size={10} /> {t.actualTime || t.time || '-'}</span>
+                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${t.status === 'Completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : t.status === 'Blocked' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'}`}>
+                                    {t.status === 'Completed' ? <CheckCircle2 size={10} /> : t.status === 'Blocked' ? <AlertTriangle size={10} /> : <RefreshCw size={10} />}
+                                    {t.status || 'Completed'}
+                                  </span>
+                                </div>
+                                {t.blockerReason && <div className="mt-1 text-xs text-red-600 dark:text-red-400 flex items-start gap-1.5 bg-red-50 dark:bg-red-900/20 p-2 rounded"><AlertTriangle size={14} className="shrink-0" /> <span className="leading-tight">{t.blockerReason}</span></div>}
                               </li>
                             ))}
                           </ul>
-                        ) : <span className="text-xs text-slate-300 dark:text-slate-600 italic">Not Submitted</span>}
+                        ) : (
+                          <div className="flex flex-col items-center justify-center p-4 text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 w-full min-h-[100px]">
+                            <Clock size={20} className="mb-1 opacity-50" />
+                            <span className="text-[10px] font-semibold uppercase tracking-wider">Pending Update</span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-center">
                         {isManagerView && row && !isLeave && (
@@ -2441,7 +2621,7 @@ if __name__ == '__main__':
 }
 
 // --- VIEW 3: Reports ---
-function ReportsView({ data, showNotification }) {
+function ReportsView({ data, showNotification, users }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [isExporting, setIsExporting] = useState(false);
   const styleHeader = (cell) => {
@@ -2483,8 +2663,8 @@ function ReportsView({ data, showNotification }) {
   }, [filteredData]);
 
   const chartData = useMemo(() => {
-    const members = [...new Set(filteredData.map(d => d.userName))];
-    return members.map(memberName => {
+    const teamMembers = users ? users.filter(u => u.role !== 'ADMIN').map(u => u.name) : [...new Set(filteredData.map(d => d.userName))];
+    return teamMembers.map(memberName => {
       const memberData = filteredData.filter(d => d.userName === memberName && d.status !== 'LEAVE');
       let totalHours = 0;
       memberData.forEach(doc => {
@@ -2497,9 +2677,25 @@ function ReportsView({ data, showNotification }) {
         name: memberName,
         hours: Number(totalHours.toFixed(2))
       };
-    }).filter(entry => entry.hours > 0)
-      .sort((a, b) => b.hours - a.hours);
+    }).sort((a, b) => b.hours - a.hours);
   }, [filteredData]);
+
+  const projectChartData = useMemo(() => {
+    const projectMap = {};
+    filteredData.forEach(doc => {
+      (doc.todayActuals || []).forEach(t => {
+        if (t.task?.trim()) {
+          const p = t.project || 'Unassigned';
+          projectMap[p] = (projectMap[p] || 0) + durationToHours(t.actualTime || t.time);
+        }
+      });
+    });
+    return Object.entries(projectMap)
+      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredData]);
+
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#64748b'];
 
   const downloadExcel = async () => {
     if (!filteredData.length) {
@@ -2525,6 +2721,9 @@ function ReportsView({ data, showNotification }) {
 
     // Create Summary Sheet
     createSummarySheet(workbook, members, data);
+
+    // Create Project Allocation Sheet
+    createProjectSummarySheet(workbook, projectChartData);
 
     // Create Member Detail Sheets
     members.forEach(memberName => {
@@ -2617,6 +2816,44 @@ function ReportsView({ data, showNotification }) {
 
     summarySheet.getRow(summarySheet.rowCount).font = { bold: true };
     summarySheet.views = [{ state: 'frozen', ySplit: 1 }];
+  };
+
+  const createProjectSummarySheet = (workbook, projectData) => {
+    const sheet = workbook.addWorksheet("Project Summary");
+
+    sheet.columns = [
+      { header: "Project", key: "name", width: 25 },
+      { header: "Total Hours", key: "hours", width: 15 },
+      { header: "Allocation (%)", key: "percentage", width: 15 }
+    ];
+
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF8B5CF6' } };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const totalHours = projectData.reduce((sum, p) => sum + p.value, 0);
+
+    projectData.forEach(p => {
+      const percentage = totalHours ? (p.value / totalHours) * 100 : 0;
+      const row = sheet.addRow({
+        name: p.name,
+        hours: p.value,
+        percentage: Number(percentage.toFixed(2))
+      });
+      row.getCell('percentage').numFmt = '0.00"%"';
+    });
+
+    // Add Total Row
+    const totalRow = sheet.addRow({
+      name: "TOTAL",
+      hours: Number(totalHours.toFixed(2)),
+      percentage: 100
+    });
+    totalRow.font = { bold: true };
+    totalRow.getCell('percentage').numFmt = '0.00"%"';
+
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
   };
 
   const createMemberSheet = (workbook, memberName, memberData, month) => {
@@ -2749,7 +2986,7 @@ function ReportsView({ data, showNotification }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Monthly Reports</h2>
@@ -2790,39 +3027,66 @@ function ReportsView({ data, showNotification }) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-slate-800 dark:text-white">{summaryStats.members}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">Team Members</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/40 dark:to-indigo-900/10 p-5 rounded-2xl border border-indigo-200 dark:border-indigo-800 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col items-center justify-center">
+            <Users size={24} className="text-indigo-600 dark:text-indigo-400 mb-2" />
+            <div className="text-3xl font-bold text-indigo-700 dark:text-indigo-300">{summaryStats.members}</div>
+            <div className="text-sm font-medium text-indigo-600/80 dark:text-indigo-400/80 uppercase tracking-wider mt-1 text-center">Team Members</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-slate-800 dark:text-white">{summaryStats.totalEntries}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">Total Entries</div>
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/40 dark:to-blue-900/10 p-5 rounded-2xl border border-blue-200 dark:border-blue-800 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col items-center justify-center">
+            <FileSpreadsheet size={24} className="text-blue-600 dark:text-blue-400 mb-2" />
+            <div className="text-3xl font-bold text-blue-700 dark:text-blue-300">{summaryStats.totalEntries}</div>
+            <div className="text-sm font-medium text-blue-600/80 dark:text-blue-400/80 uppercase tracking-wider mt-1 text-center">Total Entries</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{summaryStats.workingEntries}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">Working Days</div>
+          <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/40 dark:to-green-900/10 p-5 rounded-2xl border border-green-200 dark:border-green-800 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col items-center justify-center">
+            <CalendarCheck size={24} className="text-green-600 dark:text-green-400 mb-2" />
+            <div className="text-3xl font-bold text-green-700 dark:text-green-300">{summaryStats.workingEntries}</div>
+            <div className="text-sm font-medium text-green-600/80 dark:text-green-400/80 uppercase tracking-wider mt-1 text-center">Working Days</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-amber-600">{summaryStats.leaveEntries}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">Leave Days</div>
+          <div className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/40 dark:to-amber-900/10 p-5 rounded-2xl border border-amber-200 dark:border-amber-800 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col items-center justify-center">
+            <Coffee size={24} className="text-amber-600 dark:text-amber-400 mb-2" />
+            <div className="text-3xl font-bold text-amber-700 dark:text-amber-300">{summaryStats.leaveEntries}</div>
+            <div className="text-sm font-medium text-amber-600/80 dark:text-amber-400/80 uppercase tracking-wider mt-1 text-center">Leave Days</div>
           </div>
         </div>
 
         {chartData.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Duration Worked by Team Members</h3>
-            <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg">
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ angle: -35, textAnchor: 'end' }} interval={0} height={80} />
-                  <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft' }} />
-                  <Tooltip formatter={(value) => [`${value} hours`, 'Duration']} />
-                  <Legend />
-                  <Bar dataKey="hours" fill="#3b82f6" name="Total Hours" barSize={40} minPointSize={3} />
-                </BarChart>
-              </ResponsiveContainer>
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Hours by Team Member</h3>
+              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.5} />
+                    <XAxis dataKey="name" tick={{ angle: -45, textAnchor: 'end', fontSize: 11 }} interval={0} height={100} />
+                    <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 12, offset: -5 }} tick={{ fontSize: 12 }} />
+                    <Tooltip formatter={(value) => [`${value} hours`, 'Duration']} cursor={{ fill: 'rgba(59, 130, 246, 0.05)' }} />
+                    <Bar dataKey="hours" fill="#3b82f6" name="Total Hours" barSize={32} radius={[4, 4, 0, 0]} minPointSize={3} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Time Allocation by Project</h3>
+              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700 flex justify-center items-center">
+                <ResponsiveContainer width="100%" height={350}>
+                  <PieChart>
+                    <Pie 
+                      data={projectChartData} cx="50%" cy="50%" 
+                      innerRadius={80} outerRadius={120} 
+                      paddingAngle={2} dataKey="value" nameKey="name" 
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}
+                    >
+                      {projectChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value} hours`, 'Total Time']} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         )}
@@ -2844,6 +3108,7 @@ function AuditLogsView({ data, showNotification }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAction, setSelectedAction] = useState('all');
   const [selectedUser, setSelectedUser] = useState('all');
+  const [sortConfig, setSortConfig] = useState({ key: 'timestamp', direction: 'desc' });
 
   const sortedLogs = [...data].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
@@ -2861,6 +3126,29 @@ function AuditLogsView({ data, showNotification }) {
 
   const uniqueActions = [...new Set(data.map(log => log.action).filter(Boolean))];
   const uniqueUsers = [...new Set(data.map(log => log.userName).filter(Boolean))];
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const sortedFilteredLogs = [...filteredLogs].sort((a, b) => {
+    let aVal = a[sortConfig.key] || '';
+    let bVal = b[sortConfig.key] || '';
+    if (sortConfig.key === 'timestamp' || sortConfig.key === 'targetDate') {
+      aVal = new Date(aVal).getTime() || 0;
+      bVal = new Date(bVal).getTime() || 0;
+      return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+    } else {
+       aVal = String(aVal).toLowerCase();
+       bVal = String(bVal).toLowerCase();
+       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+       return 0;
+    }
+  });
 
   const exportAuditLogs = async (format = 'xlsx') => {
     if (!filteredLogs.length) {
@@ -2938,7 +3226,7 @@ function AuditLogsView({ data, showNotification }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Audit Logs</h2>
@@ -2948,41 +3236,46 @@ function AuditLogsView({ data, showNotification }) {
 
       <div className="bg-white dark:bg-slate-800 rounded-xl shadow border border-slate-200 dark:border-slate-700 p-6">
         {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="flex-1">
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
             <input
               type="text"
-              placeholder="Search logs..."
+              placeholder="Search logs by user, action, or details..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`${inputBase} w-full`}
+              className={`${inputBase} w-full pl-10`}
             />
           </div>
-          <div className="sm:w-48">
+          <div className="sm:w-56 relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
             <select
               value={selectedAction}
               onChange={(e) => setSelectedAction(e.target.value)}
-              className={inputBase}
+              className={`${inputBase} w-full pl-10 appearance-none`}
             >
               <option value="all">All Actions</option>
               {uniqueActions.map(action => (
                 <option key={action} value={action}>{action}</option>
               ))}
             </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
           </div>
-          <div className="sm:w-48">
+          <div className="sm:w-56 relative">
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
             <select
               value={selectedUser}
               onChange={(e) => setSelectedUser(e.target.value)}
-              className={inputBase}
+              className={`${inputBase} w-full pl-10 appearance-none`}
             >
               <option value="all">All Users</option>
               {uniqueUsers.map(user => (
                 <option key={user} value={user}>{user}</option>
               ))}
             </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0">
             <button
               onClick={() => exportAuditLogs('csv')}
               disabled={!filteredLogs.length}
@@ -3007,62 +3300,92 @@ function AuditLogsView({ data, showNotification }) {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-slate-800 dark:text-white">{data.length}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">Total Logs</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+            <div className="bg-slate-100 dark:bg-slate-700 p-3 rounded-lg text-slate-600 dark:text-slate-300"><History size={20}/></div>
+            <div>
+              <div className="text-2xl font-bold text-slate-800 dark:text-white">{data.length}</div>
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Logs</div>
+            </div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{filteredLogs.length}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">Filtered Logs</div>
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+            <div className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg text-blue-600 dark:text-blue-400"><Search size={20}/></div>
+            <div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{filteredLogs.length}</div>
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filtered</div>
+            </div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{uniqueUsers.length}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">Active Users</div>
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+            <div className="bg-green-100 dark:bg-green-900/50 p-3 rounded-lg text-green-600 dark:text-green-400"><Users size={20}/></div>
+            <div>
+              <div className="text-2xl font-bold text-green-600 dark:text-green-400">{uniqueUsers.length}</div>
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Users</div>
+            </div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-purple-600">{uniqueActions.length}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">Action Types</div>
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
+            <div className="bg-purple-100 dark:bg-purple-900/50 p-3 rounded-lg text-purple-600 dark:text-purple-400"><Activity size={20}/></div>
+            <div>
+              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{uniqueActions.length}</div>
+              <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action Types</div>
+            </div>
           </div>
         </div>
 
         {/* Logs Table */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-auto max-h-[600px] relative border border-slate-200 dark:border-slate-700 rounded-lg">
           <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-slate-100 dark:bg-slate-700">
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">Timestamp</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">User</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">Action</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">Target Date</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-300 border-b">Details</th>
+            <thead className="sticky top-0 z-20 shadow-sm bg-slate-100 dark:bg-slate-700">
+              <tr>
+                <th onClick={() => handleSort('timestamp')} className="sticky left-0 z-30 bg-slate-100 dark:bg-slate-700 px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-r border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                  <div className="flex items-center gap-1.5"><Clock size={14} /> Timestamp {sortConfig.key === 'timestamp' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
+                </th>
+                <th onClick={() => handleSort('userName')} className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                  <div className="flex items-center gap-1.5"><User size={14} /> User {sortConfig.key === 'userName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
+                </th>
+                <th onClick={() => handleSort('action')} className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                  <div className="flex items-center gap-1.5"><Activity size={14} /> Action {sortConfig.key === 'action' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
+                </th>
+                <th onClick={() => handleSort('targetDate')} className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                  <div className="flex items-center gap-1.5"><Calendar size={14} /> Target Date {sortConfig.key === 'targetDate' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
+                </th>
+                <th onClick={() => handleSort('details')} className="px-4 py-3 text-left text-xs uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                  <div className="flex items-center gap-1.5"><Tag size={14} /> Details {sortConfig.key === 'details' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</div>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {filteredLogs.length === 0 ? (
+              {sortedFilteredLogs.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
                     {data.length === 0 ? 'No audit logs available.' : 'No logs match the current filters.'}
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => (
-                  <tr key={log.id} className="border-b border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
+                sortedFilteredLogs.map((log) => (
+                  <tr key={log.id} className="border-b border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700/50 animate-in fade-in duration-500">
+                    <td className="sticky left-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-700/50 px-4 py-3 text-sm text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-700 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                       {getISTString(log.timestamp)}
                     </td>
                     <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-white">
                       {log.userName || 'Unknown'}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${log.action?.includes('Created') || log.action?.includes('Submitted')
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        : log.action?.includes('Updated') || log.action?.includes('Assigned')
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                          : log.action?.includes('Deleted') || log.action?.includes('Removed')
-                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                            : 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold border ${log.action?.includes('Created') || log.action?.includes('Submitted') || log.action?.includes('Added')
+                        ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/50'
+                        : log.action?.includes('Updated') || log.action?.includes('Assigned') || log.action?.includes('Changed')
+                          ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/50'
+                          : log.action?.includes('Deleted') || log.action?.includes('Removed') || log.action?.includes('Unapproved')
+                            ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/50'
+                            : log.action?.includes('Logged In')
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800/50'
+                              : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
                         }`}>
+                        {log.action?.includes('Created') || log.action?.includes('Added') || log.action?.includes('Submitted') ? <PlusCircle size={12} /> :
+                         log.action?.includes('Deleted') || log.action?.includes('Removed') ? <Trash2 size={12} /> :
+                         log.action?.includes('Updated') || log.action?.includes('Changed') ? <Edit3 size={12} /> :
+                         log.action?.includes('Logged') ? <Activity size={12} /> :
+                         log.action?.includes('Assigned') ? <UserCog size={12} /> :
+                         <Tag size={12} />}
                         {log.action || 'Unknown'}
                       </span>
                     </td>
@@ -3135,7 +3458,7 @@ function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserP
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="bg-indigo-900 text-white p-6 rounded-2xl shadow-lg">
         <h2 className="text-xl font-bold flex items-center gap-2">
           <UserCog /> Admin Control Panel
@@ -3145,23 +3468,23 @@ function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserP
 
       <div className="bg-white dark:bg-slate-800 shadow-xl rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 p-6">
         <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Add New Member</h3>
-        <div className="grid md:grid-cols-4 gap-3 mb-8">
+        <div className="grid md:grid-cols-12 gap-3 mb-5">
           <input
             type="text"
             placeholder="Member ID"
-            className={inputBase}
+            className={`md:col-span-3 ${inputBase}`}
             value={newMember.id}
             onChange={(e) => setNewMember((prev) => ({ ...prev, id: e.target.value }))}
           />
           <input
             type="text"
             placeholder="Member name"
-            className={inputBase}
+            className={`md:col-span-3 ${inputBase}`}
             value={newMember.name}
             onChange={(e) => setNewMember((prev) => ({ ...prev, name: e.target.value }))}
           />
           <select
-            className={inputBase}
+            className={`md:col-span-3 ${inputBase}`}
             value={newMember.team}
             onChange={(e) => setNewMember((prev) => ({ ...prev, team: e.target.value }))}
           >
@@ -3170,17 +3493,19 @@ function AdminView({ users, setUsers, appConfigState, setAppConfig, currentUserP
           <input
             type="password"
             placeholder="Unique PIN"
-            className={inputBase}
+            className={`md:col-span-3 ${inputBase}`}
             value={newMember.pin}
             onChange={(e) => setNewMember((prev) => ({ ...prev, pin: e.target.value }))}
           />
         </div>
-        <button
-          onClick={handleAddMember}
-          className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-2 rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 active:scale-95 ripple-button"
-        >
-          Add Member
-        </button>
+        <div className="flex justify-end">
+          <button
+            onClick={handleAddMember}
+            className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200 active:scale-95 flex items-center gap-2"
+          >
+            <PlusCircle size={16} /> Add Member
+          </button>
+        </div>
         <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 mt-6">Assign Weekly Scrum Master</h3>
         <div className="space-y-2">
           {users.filter(u => u.role !== 'ADMIN').map(user => (
