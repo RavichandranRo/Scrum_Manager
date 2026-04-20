@@ -5,9 +5,10 @@ import {
   LayoutDashboard, PlusCircle, Users, FileSpreadsheet, Copy, Mail, MessageSquare,
   LogOut, X, ChevronDown, CheckCircle2, AlertTriangle, Lock, ShieldCheck, UserCog,
   Clock, CalendarCheck, WifiOff, CloudLightning, Database, RefreshCw, Send, Activity,
-  Calendar, Tag, Trash2, Edit3, User, ExternalLink, Download, Bell, Coffee, History, Search, Filter
+  Calendar, Tag, Trash2, Edit3, User, ExternalLink, Download, Bell, Coffee, History, Search, Filter,
+  ImageIcon, Layers, GitCommit, KanbanSquare
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 
 let configError = null;
 
@@ -511,6 +512,7 @@ export default function App() {
     auditLogs: [],
     users: DEFAULT_USERS,
     customProjects: [],
+    teams: MEMBER_TEAMS,
     teamsReminderConfig: { recipients: '' },
     reminderTriggers: {}
   }), []);
@@ -543,7 +545,7 @@ export default function App() {
     systemDataRef.current = mergedPayload;
     try {
       localStorage.setItem('scrum_system_data_backup', JSON.stringify(mergedPayload));
-    } catch(e) {}
+    } catch (e) { }
     try {
       await fetch(`${BACKEND_URL}/api/system-data`, {
         method: 'POST',
@@ -595,6 +597,15 @@ export default function App() {
       const newProjects = typeof value === 'function' ? value(prev) : value;
       setTimeout(() => syncSystemData({ customProjects: newProjects }), 0);
       return newProjects;
+    });
+  };
+
+  const [teamsState, setTeamsStateInternal] = useState(defaultSystemData.teams);
+  const setTeams = (value) => {
+    setTeamsStateInternal(prev => {
+      const newTeams = typeof value === 'function' ? value(prev) : value;
+      setTimeout(() => syncSystemData({ teams: newTeams }), 0);
+      return newTeams;
     });
   };
 
@@ -705,31 +716,31 @@ export default function App() {
         const res = await fetch(`${BACKEND_URL}/api/system-data`);
         let normalized = null;
         if (res.ok) {
-           const rawData = await res.json();
-           normalized = normalizeSystemData(rawData);
+          const rawData = await res.json();
+          normalized = normalizeSystemData(rawData);
         }
-        
+
         if (!normalized || Object.keys(normalized).length === 0) {
-           const localBackup = localStorage.getItem('scrum_system_data_backup');
-           if (localBackup) normalized = JSON.parse(localBackup);
+          const localBackup = localStorage.getItem('scrum_system_data_backup');
+          if (localBackup) normalized = JSON.parse(localBackup);
         } else {
-           // Prevent server restart from wiping out SM assignment
-           const localBackupStr = localStorage.getItem('scrum_system_data_backup');
-           if (localBackupStr) {
-               const localBackup = JSON.parse(localBackupStr);
-               const serverSmId = normalized.appConfig?.currentScrumMasterId;
-               const defaultSmId = defaultSystemData.appConfig.currentScrumMasterId;
-               const localSmId = localBackup?.appConfig?.currentScrumMasterId;
-               
-               if ((!serverSmId || serverSmId === defaultSmId) && localSmId && localSmId !== defaultSmId) {
-                   if (!normalized.appConfig) normalized.appConfig = {};
-                   normalized.appConfig.currentScrumMasterId = localSmId;
-               }
-               // Also recover custom projects if server lost them
-               if ((!normalized.customProjects || normalized.customProjects.length === 0) && localBackup.customProjects?.length > 0) {
-                   normalized.customProjects = localBackup.customProjects;
-               }
-           }
+          // Prevent server restart from wiping out SM assignment
+          const localBackupStr = localStorage.getItem('scrum_system_data_backup');
+          if (localBackupStr) {
+            const localBackup = JSON.parse(localBackupStr);
+            const serverSmId = normalized.appConfig?.currentScrumMasterId;
+            const defaultSmId = defaultSystemData.appConfig.currentScrumMasterId;
+            const localSmId = localBackup?.appConfig?.currentScrumMasterId;
+
+            if ((!serverSmId || serverSmId === defaultSmId) && localSmId && localSmId !== defaultSmId) {
+              if (!normalized.appConfig) normalized.appConfig = {};
+              normalized.appConfig.currentScrumMasterId = localSmId;
+            }
+            // Also recover custom projects if server lost them
+            if ((!normalized.customProjects || normalized.customProjects.length === 0) && localBackup.customProjects?.length > 0) {
+              normalized.customProjects = localBackup.customProjects;
+            }
+          }
         }
 
         const merged = {
@@ -750,30 +761,32 @@ export default function App() {
         if (Array.isArray(merged.auditLogs)) setAuditLogsState(merged.auditLogs);
         if (Array.isArray(merged.users) && merged.users.length > 0) setUsersState(merged.users);
         if (Array.isArray(merged.customProjects)) setCustomProjectsState(merged.customProjects);
+        if (Array.isArray(merged.teams) && merged.teams.length > 0) setTeamsStateInternal(merged.teams);
         if (merged.teamsReminderConfig) setTeamsReminderConfigState(merged.teamsReminderConfig);
         if (merged.reminderTriggers && typeof merged.reminderTriggers === 'object') setReminderTriggersState(merged.reminderTriggers);
       } catch (err) {
         console.warn("Could not fetch /api/system-data", err);
         const localBackup = localStorage.getItem('scrum_system_data_backup');
         if (localBackup) {
-           const normalized = JSON.parse(localBackup);
-           const merged = {
-             ...defaultSystemData,
-             ...normalized,
-             appConfig: {
-               ...defaultSystemData.appConfig,
-               ...(normalized?.appConfig || {})
-             }
-           };
-           systemDataRef.current = mergeSystemData(merged);
-           if (merged.appConfig?.currentScrumMasterId) {
-             setAppConfigState(prev => prev.currentScrumMasterId === merged.appConfig.currentScrumMasterId ? prev : { ...prev, ...merged.appConfig });
-           }
-           if (Array.isArray(merged.auditLogs)) setAuditLogsState(merged.auditLogs);
-           if (Array.isArray(merged.users) && merged.users.length > 0) setUsersState(merged.users);
-           if (Array.isArray(merged.customProjects)) setCustomProjectsState(merged.customProjects);
-           if (merged.teamsReminderConfig) setTeamsReminderConfigState(merged.teamsReminderConfig);
-           if (merged.reminderTriggers) setReminderTriggersState(merged.reminderTriggers);
+          const normalized = JSON.parse(localBackup);
+          const merged = {
+            ...defaultSystemData,
+            ...normalized,
+            appConfig: {
+              ...defaultSystemData.appConfig,
+              ...(normalized?.appConfig || {})
+            }
+          };
+          systemDataRef.current = mergeSystemData(merged);
+          if (merged.appConfig?.currentScrumMasterId) {
+            setAppConfigState(prev => prev.currentScrumMasterId === merged.appConfig.currentScrumMasterId ? prev : { ...prev, ...merged.appConfig });
+          }
+          if (Array.isArray(merged.auditLogs)) setAuditLogsState(merged.auditLogs);
+          if (Array.isArray(merged.users) && merged.users.length > 0) setUsersState(merged.users);
+          if (Array.isArray(merged.customProjects)) setCustomProjectsState(merged.customProjects);
+          if (Array.isArray(merged.teams) && merged.teams.length > 0) setTeamsStateInternal(merged.teams);
+          if (merged.teamsReminderConfig) setTeamsReminderConfigState(merged.teamsReminderConfig);
+          if (merged.reminderTriggers) setReminderTriggersState(merged.reminderTriggers);
         }
       }
     };
@@ -1041,6 +1054,10 @@ export default function App() {
             <AdminView
               users={usersState}
               setUsers={setUsers}
+              projectsState={customProjects}
+              setProjects={setCustomProjects}
+              teamsState={teamsState}
+              setTeams={setTeams}
               appConfigState={appConfigState}
               setAppConfig={setAppConfig}
               currentUserProfile={currentUserProfile}
@@ -1112,7 +1129,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
   const previousEntry = existingData.filter(d => d.userId === currentUserProfile.id && d.date < inputDate).sort((a, b) => new Date(b.date) - new Date(a.date))[0];
   const isUpdateMode = !!existingEntry;
   const isOnLeave = existingEntry?.status === 'LEAVE';
-  
+
   const isKarthika = currentUserProfile.name === 'Karthika S';
   const [showNextDay, setShowNextDay] = useState(false);
 
@@ -1124,7 +1141,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
   });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
-  
+
   const allProjectOptions = useMemo(() => {
     const base = [...PROJECT_OPTIONS];
     const custom = (customProjects || []).filter(p => !base.includes(p));
@@ -1225,10 +1242,10 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
       });
       setShowNextDay(!!existingEntry.nextDayPlan && existingEntry.nextDayPlan.length > 0);
     } else {
-        const prevActuals = previousEntry?.todayActuals?.length > 0 
-          ? previousEntry.todayActuals 
-          : (previousEntry?.todayPlan || []);
-        const autoYesterday = prevActuals
+      const prevActuals = previousEntry?.todayActuals?.length > 0
+        ? previousEntry.todayActuals
+        : (previousEntry?.todayPlan || []);
+      const autoYesterday = prevActuals
         .filter((task) => (task.task || '').trim())
         .map((t) => ({
           ...formatLoadedTask(t, true),
@@ -1262,7 +1279,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
     if (field === 'project' && value !== 'Others') {
       newSection[index].customProject = '';
     }
-    
+
     let newFormData = { ...formData, [section]: newSection };
     if (section === 'todayPlan' && !isDayEndOpen) {
       newFormData.todayActuals = newSection.map(p => ({ ...p, status: 'Completed', isBlocked: false, blockerReason: '' }));
@@ -1336,7 +1353,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
 
       return payload;
     };
-    
+
     const newCustomProjects = new Set(customProjects || []);
     const checkCustom = (t) => {
       if (t.project === 'Others' && t.customProject?.trim()) newCustomProjects.add(t.customProject.trim());
@@ -1605,7 +1622,7 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
                 </h3>
                 <div className="flex items-center gap-4">
                   <label className="flex items-center gap-2 text-sm font-semibold text-purple-700 dark:text-purple-300 cursor-pointer">
-                    <input type="checkbox" checked={showNextDay} onChange={e => setShowNextDay(e.target.checked)} className="rounded border-purple-300 text-purple-600 focus:ring-purple-500 bg-white dark:bg-slate-800 w-4 h-4"/>
+                    <input type="checkbox" checked={showNextDay} onChange={e => setShowNextDay(e.target.checked)} className="rounded border-purple-300 text-purple-600 focus:ring-purple-500 bg-white dark:bg-slate-800 w-4 h-4" />
                     Would you like to add next day's status?
                   </label>
                   {showNextDay && <button type="button" onClick={() => addTask('nextDayPlan')} className="inline-flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-bold hover:bg-purple-100 dark:hover:bg-purple-900/40 px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95"><PlusCircle size={16} /> Add Plan Item</button>}
@@ -2624,6 +2641,99 @@ if __name__ == '__main__':
 function ReportsView({ data, showNotification, users }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [isExporting, setIsExporting] = useState(false);
+
+  const downloadChartAsPNG = (containerId, filename, titleText, legendData, legendColors) => {
+    const container = document.getElementById(containerId);
+    if (!container) return showNotification('error', 'Chart not found.');
+    const svg = container.querySelector('svg');
+    if (!svg) return showNotification('error', 'SVG not found.');
+
+    let svgData = new XMLSerializer().serializeToString(svg);
+    // Ensure the SVG namespace is present (required for image rendering)
+    if (!svgData.includes('xmlns="http://www.w3.org/2000/svg"')) {
+      svgData = svgData.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+
+    const svgSize = svg.getBoundingClientRect();
+    const titleHeight = titleText ? 40 : 0;
+    
+    let legendHeight = 0;
+    if (legendData && legendData.length > 0) {
+      // Dynamically calculate required lines for the legend
+      const tempCanvas = document.createElement('canvas');
+      const tctx = tempCanvas.getContext('2d');
+      tctx.font = '12px sans-serif';
+      let cx = 20;
+      let lines = 1;
+      legendData.forEach(item => {
+        const text = `${item.name} (${item.value}h)`;
+        const tw = tctx.measureText(text).width;
+        cx += tw + 30;
+        if (cx > svgSize.width - 80) {
+          cx = 20;
+          lines++;
+        }
+      });
+      legendHeight = lines * 20 + 20;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = svgSize.width * 2; // Scale by 2 for high DPI displays
+    canvas.height = (svgSize.height + titleHeight + legendHeight) * 2;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(2, 2);
+    
+    const isDark = document.documentElement.classList.contains('dark');
+    ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
+    ctx.fillRect(0, 0, svgSize.width, svgSize.height + titleHeight + legendHeight);
+    
+    if (titleText) {
+      ctx.fillStyle = isDark ? '#f8fafc' : '#0f172a';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(titleText, svgSize.width / 2, 25);
+    }
+    
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, titleHeight);
+      
+      if (legendData && legendData.length > 0) {
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'left';
+        const startY = titleHeight + svgSize.height + 20;
+        let currentX = 20;
+        let currentY = startY;
+        
+        legendData.forEach((item, index) => {
+          const color = legendColors ? legendColors[index % legendColors.length] : '#3b82f6';
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(currentX + 5, currentY - 4, 5, 0, 2 * Math.PI);
+          ctx.fill();
+          
+          ctx.fillStyle = isDark ? '#cbd5e1' : '#334155';
+          const text = `${item.name} (${item.value}h)`;
+          ctx.fillText(text, currentX + 15, currentY);
+          
+          const textWidth = ctx.measureText(text).width;
+          currentX += textWidth + 30;
+          
+          if (currentX > svgSize.width - 80) {
+            currentX = 20;
+            currentY += 20;
+          }
+        });
+      }
+      
+      const a = document.createElement('a');
+      a.download = filename;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+  };
+
   const styleHeader = (cell) => {
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
@@ -3053,54 +3163,54 @@ function ReportsView({ data, showNotification, users }) {
         {chartData.length > 0 && (
           <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Hours by Team Member</h3>
-            <button onClick={() => downloadChartAsPNG('bar-chart-container', `Hours_by_Member_${month}.png`)} className="text-xs flex items-center gap-1.5 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-3 py-1.5 rounded-lg transition-colors font-semibold shadow-sm active:scale-95 dark:bg-indigo-900/50 dark:text-indigo-300">
-              <ImageIcon size={14} /> Export Image
-            </button>
-          </div>
-          <div id="bar-chart-container" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
-            <div className="w-full h-[350px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
-                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.5} />
-                  <XAxis dataKey="name" tick={{ angle: -45, textAnchor: 'end', fontSize: 11 }} interval={0} height={100} />
-                  <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 12, offset: -5 }} tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(value) => [`${value} hours`, 'Duration']} cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                  <Bar dataKey="hours" fill="#3b82f6" name="Total Hours" barSize={32} radius={[4, 4, 0, 0]} minPointSize={3} animationDuration={1500} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Hours by Team Member</h3>
+                <button onClick={() => downloadChartAsPNG('bar-chart-container', `Hours_by_Member_${month}.png`, 'Hours by Team Member')} className="text-xs flex items-center gap-1.5 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-3 py-1.5 rounded-lg transition-colors font-semibold shadow-sm active:scale-95 dark:bg-indigo-900/50 dark:text-indigo-300">
+                  <ImageIcon size={14} /> Export Image
+                </button>
+              </div>
+              <div id="bar-chart-container" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-full h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.5} />
+                      <XAxis dataKey="name" tick={{ angle: -45, textAnchor: 'end', fontSize: 11 }} interval={0} height={100} />
+                      <YAxis label={{ value: 'Hours', angle: -90, position: 'insideLeft', fontSize: 12, offset: -5 }} tick={{ fontSize: 12 }} />
+                      <Tooltip formatter={(value) => [`${value} hours`, 'Duration']} cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                      <Bar dataKey="hours" fill="#3b82f6" name="Total Hours" barSize={32} radius={[4, 4, 0, 0]} minPointSize={3} animationDuration={1500} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
-            
+
             <div>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Time Allocation by Project</h3>
-            <button onClick={() => downloadChartAsPNG('pie-chart-container', `Time_by_Project_${month}.png`)} className="text-xs flex items-center gap-1.5 bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 py-1.5 rounded-lg transition-colors font-semibold shadow-sm active:scale-95 dark:bg-purple-900/50 dark:text-purple-300">
-              <ImageIcon size={14} /> Export Image
-            </button>
-          </div>
-          <div id="pie-chart-container" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow flex justify-center items-center">
-            <div className="w-full h-[350px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie 
-                    data={projectChartData} cx="50%" cy="50%" 
-                    innerRadius={80} outerRadius={120} 
-                    paddingAngle={3} dataKey="value" nameKey="name" 
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={true}
-                    animationDuration={1500}
-                  >
-                    {projectChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} style={{ outline: 'none' }} className="hover:opacity-80 transition-opacity duration-300 cursor-pointer" />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`${value} hours`, 'Total Time']} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Time Allocation by Project</h3>
+                <button onClick={() => downloadChartAsPNG('pie-chart-container', `Time_by_Project_${month}.png`, 'Time Allocation by Project', projectChartData, COLORS)} className="text-xs flex items-center gap-1.5 bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 py-1.5 rounded-lg transition-colors font-semibold shadow-sm active:scale-95 dark:bg-purple-900/50 dark:text-purple-300">
+                  <ImageIcon size={14} /> Export Image
+                </button>
+              </div>
+              <div id="pie-chart-container" className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow flex justify-center items-center">
+                <div className="w-full h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={projectChartData} cx="50%" cy="50%"
+                        innerRadius={80} outerRadius={120}
+                        paddingAngle={3} dataKey="value" nameKey="name"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={true}
+                        animationDuration={1500}
+                      >
+                        {projectChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} style={{ outline: 'none' }} className="hover:opacity-80 transition-opacity duration-300 cursor-pointer" />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => [`${value} hours`, 'Total Time']} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
           </div>
@@ -3157,11 +3267,11 @@ function AuditLogsView({ data, showNotification }) {
       bVal = new Date(bVal).getTime() || 0;
       return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
     } else {
-       aVal = String(aVal).toLowerCase();
-       bVal = String(bVal).toLowerCase();
-       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-       return 0;
+      aVal = String(aVal).toLowerCase();
+      bVal = String(bVal).toLowerCase();
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
     }
   });
 
@@ -3317,28 +3427,28 @@ function AuditLogsView({ data, showNotification }) {
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
-            <div className="bg-slate-100 dark:bg-slate-700 p-3 rounded-lg text-slate-600 dark:text-slate-300"><History size={20}/></div>
+            <div className="bg-slate-100 dark:bg-slate-700 p-3 rounded-lg text-slate-600 dark:text-slate-300"><History size={20} /></div>
             <div>
               <div className="text-2xl font-bold text-slate-800 dark:text-white">{data.length}</div>
               <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Logs</div>
             </div>
           </div>
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
-            <div className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg text-blue-600 dark:text-blue-400"><Search size={20}/></div>
+            <div className="bg-blue-100 dark:bg-blue-900/50 p-3 rounded-lg text-blue-600 dark:text-blue-400"><Search size={20} /></div>
             <div>
               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{filteredLogs.length}</div>
               <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Filtered</div>
             </div>
           </div>
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
-            <div className="bg-green-100 dark:bg-green-900/50 p-3 rounded-lg text-green-600 dark:text-green-400"><Users size={20}/></div>
+            <div className="bg-green-100 dark:bg-green-900/50 p-3 rounded-lg text-green-600 dark:text-green-400"><Users size={20} /></div>
             <div>
               <div className="text-2xl font-bold text-green-600 dark:text-green-400">{uniqueUsers.length}</div>
               <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Active Users</div>
             </div>
           </div>
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center gap-4">
-            <div className="bg-purple-100 dark:bg-purple-900/50 p-3 rounded-lg text-purple-600 dark:text-purple-400"><Activity size={20}/></div>
+            <div className="bg-purple-100 dark:bg-purple-900/50 p-3 rounded-lg text-purple-600 dark:text-purple-400"><Activity size={20} /></div>
             <div>
               <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{uniqueActions.length}</div>
               <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action Types</div>
@@ -3396,11 +3506,11 @@ function AuditLogsView({ data, showNotification }) {
                               : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
                         }`}>
                         {log.action?.includes('Created') || log.action?.includes('Added') || log.action?.includes('Submitted') ? <PlusCircle size={12} /> :
-                         log.action?.includes('Deleted') || log.action?.includes('Removed') ? <Trash2 size={12} /> :
-                         log.action?.includes('Updated') || log.action?.includes('Changed') ? <Edit3 size={12} /> :
-                         log.action?.includes('Logged') ? <Activity size={12} /> :
-                         log.action?.includes('Assigned') ? <UserCog size={12} /> :
-                         <Tag size={12} />}
+                          log.action?.includes('Deleted') || log.action?.includes('Removed') ? <Trash2 size={12} /> :
+                            log.action?.includes('Updated') || log.action?.includes('Changed') ? <Edit3 size={12} /> :
+                              log.action?.includes('Logged') ? <Activity size={12} /> :
+                                log.action?.includes('Assigned') ? <UserCog size={12} /> :
+                                  <Tag size={12} />}
                         {log.action || 'Unknown'}
                       </span>
                     </td>
@@ -3601,30 +3711,30 @@ function AdminView({ users, setUsers, projectsState, setProjects, teamsState, se
 
       <div className="bg-white dark:bg-slate-800 shadow-xl rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 p-6 mt-6 grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Users size={18}/> Manage Teams</h3>
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Users size={18} /> Manage Teams</h3>
           <div className="flex gap-2 mb-4">
-            <input type="text" placeholder="New Team Name" className={`flex-1 ${inputBase}`} value={newTeam} onChange={e => setNewTeam(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddTeam()}/>
-            <button onClick={handleAddTeam} className="bg-indigo-600 text-white px-3 rounded hover:bg-indigo-700"><PlusCircle size={16}/></button>
+            <input type="text" placeholder="New Team Name" className={`flex-1 ${inputBase}`} value={newTeam} onChange={e => setNewTeam(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddTeam()} />
+            <button onClick={handleAddTeam} className="bg-indigo-600 text-white px-3 rounded hover:bg-indigo-700"><PlusCircle size={16} /></button>
           </div>
           <div className="flex flex-wrap gap-2">
             {teamsState.map(team => (
               <span key={team} className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full text-sm font-semibold flex items-center gap-2">
-                {team} <button onClick={() => handleRemoveTeam(team)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+                {team} <button onClick={() => handleRemoveTeam(team)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
               </span>
             ))}
           </div>
         </div>
-        
+
         <div>
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Layers size={18}/> Manage Projects</h3>
+          <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2"><Layers size={18} /> Manage Projects</h3>
           <div className="flex gap-2 mb-4">
-            <input type="text" placeholder="New Project Name" className={`flex-1 ${inputBase}`} value={newProject} onChange={e => setNewProject(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddProject()}/>
-            <button onClick={handleAddProject} className="bg-purple-600 text-white px-3 rounded hover:bg-purple-700"><PlusCircle size={16}/></button>
+            <input type="text" placeholder="New Project Name" className={`flex-1 ${inputBase}`} value={newProject} onChange={e => setNewProject(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddProject()} />
+            <button onClick={handleAddProject} className="bg-purple-600 text-white px-3 rounded hover:bg-purple-700"><PlusCircle size={16} /></button>
           </div>
           <div className="flex flex-wrap gap-2">
             {projectsState.map(project => (
               <span key={project} className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-full text-sm font-semibold flex items-center gap-2">
-                {project} <button onClick={() => handleRemoveProject(project)} className="text-red-400 hover:text-red-600"><X size={14}/></button>
+                {project} <button onClick={() => handleRemoveProject(project)} className="text-red-400 hover:text-red-600"><X size={14} /></button>
               </span>
             ))}
           </div>
@@ -3637,9 +3747,9 @@ function AdminView({ users, setUsers, projectsState, setProjects, teamsState, se
 // --- VIEW 6: Kanban Board ---
 function KanbanView({ data, users }) {
   const [filterDate, setFilterDate] = useState(getTodayString());
-  
+
   const dayData = useMemo(() => data.filter(d => d.date === filterDate && d.status !== 'LEAVE'), [data, filterDate]);
-  
+
   const columns = useMemo(() => {
     const cols = {
       'To Do (Plan)': [],
@@ -3647,7 +3757,7 @@ function KanbanView({ data, users }) {
       'Blocked': [],
       'Completed': []
     };
-    
+
     dayData.forEach(userDoc => {
       (userDoc.todayPlan || []).forEach(task => {
         if (task.task?.trim()) cols['To Do (Plan)'].push({ ...task, userName: userDoc.userName, userId: userDoc.userId });
@@ -3693,10 +3803,10 @@ function KanbanView({ data, users }) {
                     {task.priority && <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${task.priority === 'High' || task.priority === 'Critical' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'}`}>{task.priority}</span>}
                   </div>
                   <p className="text-sm text-slate-800 dark:text-slate-200 font-medium mb-3">{task.task}</p>
-                  {task.blockerReason && <div className="text-xs bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-2 rounded mb-3 flex gap-1.5"><AlertTriangle size={14} className="shrink-0"/> {task.blockerReason}</div>}
+                  {task.blockerReason && <div className="text-xs bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-2 rounded mb-3 flex gap-1.5"><AlertTriangle size={14} className="shrink-0" /> {task.blockerReason}</div>}
                   <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><User size={12}/> {task.userName}</div>
-                    {task.time && <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 font-medium"><Clock size={12}/> {task.time}</div>}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400"><User size={12} /> {task.userName}</div>
+                    {task.time && <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 font-medium"><Clock size={12} /> {task.time}</div>}
                   </div>
                 </div>
               ))}
@@ -3711,9 +3821,9 @@ function KanbanView({ data, users }) {
 // --- VIEW 7: Personal Analytics ---
 function AnalyticsView({ data, currentUserProfile }) {
   const userStats = useMemo(() => {
-    const userEntries = data.filter(d => d.userId === currentUserProfile.id).sort((a,b) => new Date(a.date) - new Date(b.date));
-    
-    const last7Days = Array.from({length: 7}, (_, i) => {
+    const userEntries = data.filter(d => d.userId === currentUserProfile.id).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(); d.setDate(d.getDate() - (6 - i));
       return d.toISOString().split('T')[0];
     });
@@ -3768,7 +3878,7 @@ function AnalyticsView({ data, currentUserProfile }) {
               <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.3} vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} dy={10} />
               <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#8b5cf6', strokeWidth: 2, strokeDasharray: '4 4' }} />
+              <Tooltip cursor={{ stroke: '#8b5cf6', strokeWidth: 2, strokeDasharray: '4 4' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
               <Line type="monotone" dataKey="Hours" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 5, fill: '#8b5cf6', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} animationDuration={1500} />
             </LineChart>
           </ResponsiveContainer>
@@ -3805,7 +3915,7 @@ function TimelineView({ data }) {
             <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4 bg-white dark:bg-slate-800 inline-block px-4 py-1.5 rounded-full shadow-sm border border-slate-100 dark:border-slate-700">
               {formatDate(date)}
             </h3>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
               {entries.map(entry => (
                 <div key={entry.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow">
@@ -3826,7 +3936,7 @@ function TimelineView({ data }) {
                     <ul className="space-y-1.5">
                       {(entry.todayActuals || []).slice(0, 3).map((t, i) => (
                         <li key={i} className="text-sm text-slate-600 dark:text-slate-400 truncate flex items-center gap-2">
-                          <CheckCircle2 size={12} className={t.status === 'Completed' ? 'text-green-500' : 'text-slate-400'}/> {t.task}
+                          <CheckCircle2 size={12} className={t.status === 'Completed' ? 'text-green-500' : 'text-slate-400'} /> {t.task}
                         </li>
                       ))}
                       {(entry.todayActuals?.length > 3) && (
