@@ -159,93 +159,127 @@ const buildOutlookEmailHtml = (selectedDate, currentSM, dailyData) => {
   }) + ' IST';
 
   let htmlTable = `
-    <div style="max-width: 900px; margin: 0 auto; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333;">
-      <div style="background-color: #f8fafc; border: 1px solid #1e3a8a; border-radius: 8px 8px 0 0; overflow: hidden;">
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border-spacing: 0;">
-          <tr>
-            <td style="width: 6px; background-color: #1e3a8a;"></td>
-            <td style="padding: 20px 24px; background-color: #1e3a8a;">
-              <h1 style="margin: 0; color: white; font-size: 28px; font-weight: 700; text-align: center;">StreetMan Scrum Status</h1>
-              <p style="margin: 8px 0 0 0; color: #e0e7ff; font-size: 14px; text-align: center;">Daily Standup Report</p>
-            </td>
-          </tr>
-        </table>
-      </div>
-      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border-top: 1px solid #1e3a8a; background-color: #f0f4ff;">
-        <tr>
-          <td style="padding: 16px 20px; vertical-align: top; width: 50%;">
-            <p style="margin: 0; color: #666; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Report Date</p>
-            <p style="margin: 4px 0 0 0; color: #1e3a8a; font-size: 18px; font-weight: 700;">${formatDate(selectedDate)}</p>
-          </td>
-          <td style="padding: 16px 20px; vertical-align: top; width: 50%; text-align: right;">
-            <p style="margin: 0; color: #666; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Scrum Master</p>
-            <p style="margin: 4px 0 0 0; color: #1e3a8a; font-size: 18px; font-weight: 700;">${currentSM?.name || 'N/A'}</p>
-          </td>
-        </tr>
-      </table>
-      <div style="padding: 24px 20px; background: white;">
-        <p style="margin: 0 0 20px 0; color: #555; font-size: 15px;">Hi Team,</p>
-        <p style="margin: 0 0 24px 0; color: #555; font-size: 15px;">Please find the scrum status summary below.</p>
-        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-          <thead>
-            <tr style="background-color: #1e3a8a; color: white;">
-              <th style="padding: 14px 12px; text-align: left; font-weight: 700; font-size: 14px; border-bottom: 3px solid #1e3a8a; letter-spacing: 0.5px; white-space: nowrap;">Team Member</th>
-              <th style="padding: 14px 12px; text-align: left; font-weight: 700; font-size: 14px; border-bottom: 3px solid #1e3a8a; letter-spacing: 0.5px; white-space: nowrap;">Yesterday's Work</th>
-              <th style="padding: 14px 12px; text-align: left; font-weight: 700; font-size: 14px; border-bottom: 3px solid #1e3a8a; letter-spacing: 0.5px; white-space: nowrap;">Today's Plan</th>
-            </tr>
-          </thead>
-          <tbody>`;
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 900px; margin: 0 auto; font-family: Segoe UI, Arial, sans-serif; color: #333333; border-collapse: collapse;">
+      <!-- Header -->
+      <tr>
+        <td bgcolor="#1e3a8a"
+    style="background-color:#1e3a8a;padding:30px 20px;text-align:center;color:#ffffff;">
+
+  <h1 style="
+      margin:0;
+      color:#ffffff !important;
+      font-size:30px;
+      font-weight:700;
+      letter-spacing:0.5px;
+      font-family:Segoe UI,Arial,sans-serif;">
+      🚀 StreetMan Daily Scrum Report
+  </h1>
+
+  <p style="
+      margin:8px 0 0 0;
+      color:#ffffff !important;
+      font-size:14px;
+      font-family:Segoe UI,Arial,sans-serif;">
+      Report Date: ${formatDate(selectedDate)}
+      &nbsp;|&nbsp;
+      Scrum Master: ${currentSM?.name || 'N/A'}
+  </p>
+
+</td>
+      </tr>
+
+      <!-- Body -->
+      <tr>
+        <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 20px;">
+          <p style="margin: 0 0 16px 0; color: #334155; font-size: 15px;">Hi Team,</p>
+          <p style="margin: 0 0 20px 0; color: #334155; font-size: 15px;">Please find the scrum status summary below.</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-collapse: collapse; margin: 20px 0; border: 1px solid #6699cc;">
+            <thead>
+              <tr>
+                <th bgcolor="#1e3a8a"
+    style="
+      background-color:#1e3a8a;
+      color:#ffffff !important;
+      padding:12px;
+      text-align:left;
+      font-size:14px;
+      font-weight:700;
+      border:1px solid #1e3a8a;
+      font-family:Segoe UI,Arial,sans-serif;">Team Member</th>
+                <th bgcolor="#1e3a8a"
+    style="
+      background-color:#1e3a8a;
+      color:#ffffff !important;
+      padding:12px;
+      text-align:left;
+      font-size:14px;
+      font-weight:700;
+      border:1px solid #1e3a8a;
+      font-family:Segoe UI,Arial,sans-serif;">Yesterday's Work</th>
+                <th bgcolor="#1e3a8a"
+    style="
+      background-color:#1e3a8a;
+      color:#ffffff !important;
+      padding:12px;
+      text-align:left;
+      font-size:14px;
+      font-weight:700;
+      border:1px solid #1e3a8a;
+      font-family:Segoe UI,Arial,sans-serif;">Today's Plan</th>
+              </tr>
+            </thead>
+            <tbody>`;
 
   dailyData.forEach((row, idx) => {
     const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafb';
-    const borderColor = idx === dailyData.length - 1 ? '2px solid #e5e7eb' : '1px solid #e5e7eb';
+    const borderColor = '1px solid #6699cc';
+
     if (row.status === 'LEAVE') {
-      htmlTable += `<tr style="background-color: ${bg};">
-        <td style="padding: 14px 12px; border-bottom: ${borderColor}; font-weight: 600; color: #1e3a8a;">${row.userName}</td>
-        <td style="padding: 14px 12px; border-bottom: ${borderColor}; text-align: center; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); color: #92400e; font-weight: 600;" colspan="2">🏖️ ON LEAVE</td>
+      htmlTable += `<tr>
+        <td bgcolor="${bg}" style="background-color: ${bg}; padding: 12px; border: ${borderColor}; font-weight: 600; color: #1e3a8a;">${row.userName}</td>
+        <td bgcolor="#fef3c7" style="background-color: #fef3c7; padding: 12px; border: ${borderColor}; text-align: center; color: #92400e; font-weight: 600;" colspan="2">🏖️ ON LEAVE</td>
       </tr>`;
     } else if (
       (!row.yesterdayWork || row.yesterdayWork.length === 0) &&
       (!row.todayPlan || row.todayPlan.length === 0)
     ) {
-      htmlTable += `<tr style="background-color: ${bg};">
-    <td style="padding: 14px 12px; border-bottom: ${borderColor}; font-weight: 600; color: #1e3a8a;">
-      ${row.userName}
-    </td>
-    <td style="padding: 14px 12px; border-bottom: ${borderColor}; text-align: center; background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); color: #991b1b; font-weight: 600;" colspan="2">
-      ⚠️ NOT FILLED
-    </td>
-  </tr>`;
+      htmlTable += `<tr>
+        <td bgcolor="${bg}" style="background-color: ${bg}; padding: 12px; border: ${borderColor}; font-weight: 600; color: #1e3a8a;">${row.userName}</td>
+        <td bgcolor="#fee2e2" style="background-color: #fee2e2; padding: 12px; border: ${borderColor}; text-align: center; color: #991b1b; font-weight: 600;" colspan="2">⚠️ NOT FILLED</td>
+      </tr>`;
     } else {
       const yesterday = row.yesterdayWork.length > 0
-        ? row.yesterdayWork.map(t => `<li style="margin: 4px 0; color: #333; font-size: 14px;">${t.task}</li>`).join('')
-        : '<li style="margin: 4px 0; color: #999; font-size: 14px; font-style: italic;">No tasks tracked</li>';
+        ? row.yesterdayWork.map(t => `<li style="margin: 4px 0; color: #333333; font-size: 13px;">${t.task}</li>`).join('')
+        : '<li style="margin: 4px 0; color: #999999; font-size: 13px; font-style: italic;">No tasks tracked</li>';
       const today = row.todayPlan.length > 0
-        ? row.todayPlan.map(t => `<li style="margin: 4px 0; color: #333; font-size: 14px;">${t.task}</li>`).join('')
-        : '<li style="margin: 4px 0; color: #999; font-size: 14px; font-style: italic;">No tasks planned</li>';
+        ? row.todayPlan.map(t => `<li style="margin: 4px 0; color: #333333; font-size: 13px;">${t.task}</li>`).join('')
+        : '<li style="margin: 4px 0; color: #999999; font-size: 13px; font-style: italic;">No tasks planned</li>';
 
-      htmlTable += `<tr style="background-color: ${bg}; transition: background-color 0.2s;">
-        <td style="padding: 14px 12px; border-bottom: ${borderColor}; font-weight: 600; color: #1e3a8a;">${row.userName}</td>
-        <td style="padding: 14px 12px; border-bottom: ${borderColor};"><ul style="margin: 0; padding-left: 20px;">${yesterday}</ul></td>
-        <td style="padding: 14px 12px; border-bottom: ${borderColor};"><ul style="margin: 0; padding-left: 20px;">${today}</ul></td>
+      htmlTable += `<tr>
+        <td bgcolor="${bg}" style="background-color: ${bg}; padding: 12px; border: ${borderColor}; font-weight: 600; color: #312e81; vertical-align: top;">${row.userName}</td>
+        <td bgcolor="${bg}" style="background-color: ${bg}; padding: 12px; border: ${borderColor}; vertical-align: top;"><ul style="margin: 0; padding-left: 16px;">${yesterday}</ul></td>
+        <td bgcolor="${bg}" style="background-color: ${bg}; padding: 12px; border: ${borderColor}; vertical-align: top;"><ul style="margin: 0; padding-left: 16px;">${today}</ul></td>
       </tr>`;
     }
   });
 
   htmlTable += `</tbody>
-        </table>
-      </div>
-      <div style="padding: 20px 20px 0 20px; background: #f9fafb; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0;">
-        <p style="margin: 0 0 8px 0; color: #1f2937; font-size: 15px; font-weight: 700;">Thanks,</p>
-        <p style="margin: 0 0 16px 0; color: #374151; font-size: 14px;">${currentSM?.name || 'StreetMan Scrum Automation'}</p>
-      </div>
-      <div style="background: #0f172a; padding: 24px 20px; text-align: center; color: #cbd5e1; border-radius: 0 0 8px 8px;">
-        <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 700; color: #f8fafc;">StreetMan Scrum Automation</p>
-        <p style="margin: 0 0 16px 0; font-size: 12px; color: #94a3b8;">Automated daily standup reporting system</p>
-        <div style="margin: 0 auto 16px auto; width: 48px; height: 2px; background: rgba(255,255,255,0.16);"></div>
-        <p style="margin: 0; font-size: 11px; color: #94a3b8;">Generated on ${generatedOn}</p>
-      </div>
-    </div>`;
+              </table>
+
+              <p style="margin: 20px 0 8px 0; color: #334155; font-size: 15px;">Thanks,</p>
+              <p style="margin: 0; color: #334155; font-size: 15px; font-weight: 600;">${currentSM?.name || 'StreetMan Scrum Automation'}</p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td bgcolor="#0f172a" style="background-color: #0f172a; padding: 24px 20px; text-align: center;">
+              <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: 700; color: #ffffff !important;font-family:Segoe UI,Arial,sans-serif;">StreetMan Scrum Automation 🤖</p>
+              <p style="margin: 0; font-size: 12px; color: #dbeafe !important;font-family:Segoe UI,Arial,sans-serif;">Generated on ${generatedOn}</p>
+            </td>
+          </tr>
+        </table>`;
 
   return htmlTable;
 };
@@ -943,11 +977,11 @@ export default function App() {
                 <NavButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Users size={18} />}>
                   Scrum Board
                 </NavButton>
+                <NavButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} icon={<FileSpreadsheet size={18} />}>
+                  Reports
+                </NavButton>
                 {(isScrumMaster || isAdmin) && (
                   <>
-                    <NavButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} icon={<FileSpreadsheet size={18} />}>
-                      Reports
-                    </NavButton>
                     <NavButton active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<History size={18} />}>
                       Audit Logs
                     </NavButton>
@@ -1048,7 +1082,7 @@ export default function App() {
               markReminderTriggered={markReminderTriggered}
             />
           )}
-          {activeTab === 'reports' && (isScrumMaster || isAdmin) && <ReportsView data={statusData} showNotification={showNotification} users={usersState} />}
+          {activeTab === 'reports' && <ReportsView data={statusData} showNotification={showNotification} users={usersState} />}
           {activeTab === 'logs' && (isScrumMaster || isAdmin) && <AuditLogsView data={auditLogsState} showNotification={showNotification} />}
           {activeTab === 'admin' && isAdmin && (
             <AdminView
@@ -1068,7 +1102,7 @@ export default function App() {
             />
           )}
 
-          {!isScrumMaster && !isAdmin && activeTab !== 'input' && activeTab !== 'dashboard' && (
+          {!isScrumMaster && !isAdmin && activeTab !== 'input' && activeTab !== 'dashboard' && activeTab !== 'reports' && (
             <div className="flex flex-col items-center justify-center h-64 text-slate-400">
               <Lock size={48} className="mb-4 text-slate-300 dark:text-slate-600" />
               <p>Restricted Access. Only Scrum Master/Admin can view this.</p>
@@ -1474,83 +1508,101 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
             </div>
 
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mt-2">Yesterday's Work</p>
-            {formData.yesterdayWork.map((item, idx) => (
-              <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12 animate-in slide-in-from-left-4 duration-300">
-                <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="What did you finish?" value={item.task} onPaste={(e) => handleTaskPaste('yesterdayWork', idx, e)} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
-                <select disabled={!isDayStartOpen} value={item.project} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
-                  <option value="" disabled>Select project</option>
-                  {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
-                </select>
-                {item.project === 'Others' && (
-                  <input
-                    disabled={!isDayStartOpen}
-                    type="text"
-                    value={item.customProject}
-                    onChange={(e) => handleTaskChange('yesterdayWork', idx, 'customProject', e.target.value)}
-                    placeholder="Specify project"
-                    className={`w-40 ${inputBase}`}
-                    required
-                  />
-                )}
-                {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
-                  <input
-                    type="text"
-                    disabled={!isDayStartOpen}
-                    placeholder="JIRA ID (e.g., ABC-123)"
-                    value={item.jiraId || ''}
-                    onChange={(e) => handleTaskChange('yesterdayWork', idx, 'jiraId', e.target.value.toUpperCase())}
-                    className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`}
-                    title="Automatically detected from task text or enter manually"
-                  />
-                )}
-                <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('yesterdayWork', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('yesterdayWork', idx, 'minutes', e.target.value)} disabled={!isDayStartOpen} />
-                <select disabled={!isDayStartOpen} value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
-                  <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
-                </select>
-                {isDayStartOpen && <button type="button" onClick={() => removeTask('yesterdayWork', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>}
-              </div>
-            ))}
+            {formData.yesterdayWork.map((item, idx) => {
+              const isLeaveTask = item.task && /\b(leave|pto|sick)\b/i.test(item.task);
+              return (
+                <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12 animate-in slide-in-from-left-4 duration-300">
+                  <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="What did you finish?" value={item.task} onPaste={(e) => handleTaskPaste('yesterdayWork', idx, e)} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
+                  {!isLeaveTask && (
+                    <>
+                      <select disabled={!isDayStartOpen} value={item.project} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
+                        <option value="" disabled>Select project</option>
+                        {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                      </select>
+                      {item.project === 'Others' && (
+                        <input
+                          disabled={!isDayStartOpen}
+                          type="text"
+                          value={item.customProject}
+                          onChange={(e) => handleTaskChange('yesterdayWork', idx, 'customProject', e.target.value)}
+                          placeholder="Specify project"
+                          className={`w-40 ${inputBase}`}
+                          required
+                        />
+                      )}
+                    </>
+                  )}
+                  {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
+                    <input
+                      type="text"
+                      disabled={!isDayStartOpen}
+                      placeholder="JIRA ID (e.g., ABC-123)"
+                      value={item.jiraId || ''}
+                      onChange={(e) => handleTaskChange('yesterdayWork', idx, 'jiraId', e.target.value.toUpperCase())}
+                      className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`}
+                      title="Automatically detected from task text or enter manually"
+                    />
+                  )}
+                  {!isLeaveTask && (
+                    <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('yesterdayWork', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('yesterdayWork', idx, 'minutes', e.target.value)} disabled={!isDayStartOpen} />
+                  )}
+                  <select disabled={!isDayStartOpen} value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('yesterdayWork', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
+                    <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
+                  </select>
+                  {isDayStartOpen && <button type="button" onClick={() => removeTask('yesterdayWork', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>}
+                </div>
+              )
+            })}
 
             <div className="flex justify-between items-center mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Today's Plan</p>
               {isDayStartOpen && <button type="button" onClick={() => addTask('todayPlan')} className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-bold hover:bg-blue-50 dark:hover:bg-blue-900/20 px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95"><PlusCircle size={16} /> Add Plan Item</button>}
             </div>
-            {formData.todayPlan.map((item, idx) => (
-              <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12 animate-in slide-in-from-left-4 duration-300">
-                <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="Planned task..." value={item.task} onPaste={(e) => handleTaskPaste('todayPlan', idx, e)} onChange={(e) => handleTaskChange('todayPlan', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
-                <select disabled={!isDayStartOpen} value={item.project} onChange={(e) => handleTaskChange('todayPlan', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
-                  <option value="" disabled>Select project</option>
-                  {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
-                </select>
-                {item.project === 'Others' && (
-                  <input
-                    disabled={!isDayStartOpen}
-                    type="text"
-                    value={item.customProject}
-                    onChange={(e) => handleTaskChange('todayPlan', idx, 'customProject', e.target.value)}
-                    placeholder="Specify project"
-                    className={`w-40 ${inputBase}`}
-                    required
-                  />
-                )}
-                {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
-                  <input
-                    type="text"
-                    disabled={!isDayStartOpen}
-                    placeholder="JIRA ID (e.g., ABC-123)"
-                    value={item.jiraId || ''}
-                    onChange={(e) => handleTaskChange('todayPlan', idx, 'jiraId', e.target.value.toUpperCase())}
-                    className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`}
-                    title="Automatically detected from task text or enter manually"
-                  />
-                )}
-                <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('todayPlan', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('todayPlan', idx, 'minutes', e.target.value)} disabled={!isDayStartOpen} />
-                <select disabled={!isDayStartOpen} value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('todayPlan', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
-                  <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
-                </select>
-                {isDayStartOpen && <button type="button" onClick={() => removeTask('todayPlan', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>}
-              </div>
-            ))}
+            {formData.todayPlan.map((item, idx) => {
+              const isLeaveTask = item.task && /\b(leave|pto|sick)\b/i.test(item.task);
+              return (
+                <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 relative pr-12 animate-in slide-in-from-left-4 duration-300">
+                  <AutoResizeTextarea disabled={!isDayStartOpen} placeholder="Planned task..." value={item.task} onPaste={(e) => handleTaskPaste('todayPlan', idx, e)} onChange={(e) => handleTaskChange('todayPlan', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
+                  {!isLeaveTask && (
+                    <>
+                      <select disabled={!isDayStartOpen} value={item.project} onChange={(e) => handleTaskChange('todayPlan', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
+                        <option value="" disabled>Select project</option>
+                        {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                      </select>
+                      {item.project === 'Others' && (
+                        <input
+                          disabled={!isDayStartOpen}
+                          type="text"
+                          value={item.customProject}
+                          onChange={(e) => handleTaskChange('todayPlan', idx, 'customProject', e.target.value)}
+                          placeholder="Specify project"
+                          className={`w-40 ${inputBase}`}
+                          required
+                        />
+                      )}
+                    </>
+                  )}
+                  {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
+                    <input
+                      type="text"
+                      disabled={!isDayStartOpen}
+                      placeholder="JIRA ID (e.g., ABC-123)"
+                      value={item.jiraId || ''}
+                      onChange={(e) => handleTaskChange('todayPlan', idx, 'jiraId', e.target.value.toUpperCase())}
+                      className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`}
+                      title="Automatically detected from task text or enter manually"
+                    />
+                  )}
+                  {!isLeaveTask && (
+                    <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('todayPlan', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('todayPlan', idx, 'minutes', e.target.value)} disabled={!isDayStartOpen} />
+                  )}
+                  <select disabled={!isDayStartOpen} value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('todayPlan', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
+                    <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
+                  </select>
+                  {isDayStartOpen && <button type="button" onClick={() => removeTask('todayPlan', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>}
+                </div>
+              )
+            })}
           </div>
 
           {isUpdateMode && (
@@ -1563,54 +1615,63 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
                 {isDayEndOpen && <button type="button" onClick={() => addTask('todayActuals')} className="inline-flex items-center gap-2 text-sm text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium hover:bg-green-50 dark:hover:bg-green-900/20 px-3 py-1.5 rounded-lg transition-all duration-200 active:scale-95"><PlusCircle size={16} /> Add Actual Item</button>}
               </div>
 
-              {formData.todayActuals.map((item, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-4 rounded-xl border border-green-200 dark:border-green-800/50 relative pr-12 shadow-sm hover:shadow-md transition-all duration-200 hover:border-green-300 dark:hover:border-green-600 animate-in slide-in-from-left-4 duration-300">
-                  <AutoResizeTextarea disabled={!isDayEndOpen} placeholder="Actual task done" value={item.task} onPaste={(e) => handleTaskPaste('todayActuals', idx, e)} onChange={(e) => handleTaskChange('todayActuals', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} />
-                  <select disabled={!isDayEndOpen} value={item.project} onChange={(e) => handleTaskChange('todayActuals', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`}>
-                    <option value="" disabled>Select project</option>
-                    {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
-                  </select>
-                  {item.project === 'Others' && (
-                    <input
-                      disabled={!isDayEndOpen}
-                      type="text"
-                      value={item.customProject}
-                      onChange={(e) => handleTaskChange('todayActuals', idx, 'customProject', e.target.value)}
-                      placeholder="Specify project"
-                      className={`w-40 ${inputBase}`}
-                      required
-                    />
-                  )}
-                  {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
-                    <input
-                      type="text"
-                      disabled={!isDayEndOpen}
-                      placeholder="JIRA ID (e.g., ABC-123)"
-                      value={item.jiraId || ''}
-                      onChange={(e) => handleTaskChange('todayActuals', idx, 'jiraId', e.target.value.toUpperCase())}
-                      className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`}
-                      title="Automatically detected from task text or enter manually"
-                    />
-                  )}
-                  <select disabled={!isDayEndOpen} value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('todayActuals', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
-                    <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
-                  </select>
-                  <select disabled={!isDayEndOpen} value={item.status} onChange={(e) => handleTaskChange('todayActuals', idx, 'status', e.target.value)} className={`w-32 ${inputBase}`}>
-                    <option value="In Progress">In Progress</option><option value="Completed">Completed</option><option value="Blocked">Blocked</option>
-                  </select>
-                  <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('todayActuals', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('todayActuals', idx, 'minutes', e.target.value)} disabled={!isDayEndOpen} />
+              {formData.todayActuals.map((item, idx) => {
+                const isLeaveTask = item.task && /\b(leave|pto|sick)\b/i.test(item.task);
+                return (
+                  <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-4 rounded-xl border border-green-200 dark:border-green-800/50 relative pr-12 shadow-sm hover:shadow-md transition-all duration-200 hover:border-green-300 dark:hover:border-green-600 animate-in slide-in-from-left-4 duration-300">
+                    <AutoResizeTextarea disabled={!isDayEndOpen} placeholder="Actual task done" value={item.task} onPaste={(e) => handleTaskPaste('todayActuals', idx, e)} onChange={(e) => handleTaskChange('todayActuals', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} />
+                    {!isLeaveTask && (
+                      <>
+                        <select disabled={!isDayEndOpen} value={item.project} onChange={(e) => handleTaskChange('todayActuals', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`}>
+                          <option value="" disabled>Select project</option>
+                          {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                        </select>
+                        {item.project === 'Others' && (
+                          <input
+                            disabled={!isDayEndOpen}
+                            type="text"
+                            value={item.customProject}
+                            onChange={(e) => handleTaskChange('todayActuals', idx, 'customProject', e.target.value)}
+                            placeholder="Specify project"
+                            className={`w-40 ${inputBase}`}
+                            required
+                          />
+                        )}
+                      </>
+                    )}
+                    {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
+                      <input
+                        type="text"
+                        disabled={!isDayEndOpen}
+                        placeholder="JIRA ID (e.g., ABC-123)"
+                        value={item.jiraId || ''}
+                        onChange={(e) => handleTaskChange('todayActuals', idx, 'jiraId', e.target.value.toUpperCase())}
+                        className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`}
+                        title="Automatically detected from task text or enter manually"
+                      />
+                    )}
+                    <select disabled={!isDayEndOpen} value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('todayActuals', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
+                      <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
+                    </select>
+                    <select disabled={!isDayEndOpen} value={item.status} onChange={(e) => handleTaskChange('todayActuals', idx, 'status', e.target.value)} className={`w-32 ${inputBase}`}>
+                      <option value="In Progress">In Progress</option><option value="Completed">Completed</option><option value="Blocked">Blocked</option>
+                    </select>
+                    {!isLeaveTask && (
+                      <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('todayActuals', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('todayActuals', idx, 'minutes', e.target.value)} disabled={!isDayEndOpen} />
+                    )}
 
-                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer shrink-0 whitespace-nowrap">
-                    <input type="checkbox" checked={item.isBlocked} onChange={(e) => handleTaskChange('todayActuals', idx, 'isBlocked', e.target.checked)} disabled={!isDayEndOpen} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-slate-800 w-4 h-4" />
-                    Blocked
-                  </label>
-                  {isDayEndOpen && <button type="button" onClick={() => removeTask('todayActuals', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>}
+                    <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer shrink-0 whitespace-nowrap">
+                      <input type="checkbox" checked={item.isBlocked} onChange={(e) => handleTaskChange('todayActuals', idx, 'isBlocked', e.target.checked)} disabled={!isDayEndOpen} className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 bg-white dark:bg-slate-800 w-4 h-4" />
+                      Blocked
+                    </label>
+                    {isDayEndOpen && <button type="button" onClick={() => removeTask('todayActuals', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>}
 
-                  {item.isBlocked && (
-                    <input disabled={!isDayEndOpen} type="text" placeholder="Explain the blocker..." value={item.blockerReason} onChange={(e) => handleTaskChange('todayActuals', idx, 'blockerReason', e.target.value)} className={`w-full mt-1 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 ${inputBase}`} required />
-                  )}
-                </div>
-              ))}
+                    {item.isBlocked && (
+                      <input disabled={!isDayEndOpen} type="text" placeholder="Explain the blocker..." value={item.blockerReason} onChange={(e) => handleTaskChange('todayActuals', idx, 'blockerReason', e.target.value)} className={`w-full mt-1 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 ${inputBase}`} required />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -1629,26 +1690,33 @@ function InputView({ currentUserProfile, existingData, customProjects, setCustom
                 </div>
               </div>
 
-              {showNextDay && formData.nextDayPlan.map((item, idx) => (
-                <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-purple-200 dark:border-purple-700 relative pr-12 transition-all animate-in slide-in-from-left-4 duration-300">
-                  <AutoResizeTextarea placeholder="Next day's planned task..." value={item.task} onPaste={(e) => handleTaskPaste('nextDayPlan', idx, e)} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
-                  <select value={item.project} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
-                    <option value="" disabled>Select project</option>
-                    {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
-                  </select>
-                  {item.project === 'Others' && (
-                    <input type="text" value={item.customProject} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'customProject', e.target.value)} placeholder="Specify project" className={`w-40 ${inputBase}`} required />
-                  )}
-                  {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
-                    <input type="text" placeholder="JIRA ID" value={item.jiraId || ''} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'jiraId', e.target.value.toUpperCase())} className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`} title="JIRA ID" />
-                  )}
-                  <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('nextDayPlan', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('nextDayPlan', idx, 'minutes', e.target.value)} disabled={false} />
-                  <select value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
-                    <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
-                  </select>
-                  <button type="button" onClick={() => removeTask('nextDayPlan', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>
-                </div>
-              ))}
+              {showNextDay && formData.nextDayPlan.map((item, idx) => {
+                const isLeaveTask = item.task && /\b(leave|pto|sick)\b/i.test(item.task);
+                return (
+                  <div key={idx} className="flex flex-wrap items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded border border-purple-200 dark:border-purple-700 relative pr-12 transition-all animate-in slide-in-from-left-4 duration-300">
+                    <AutoResizeTextarea placeholder="Next day's planned task..." value={item.task} onPaste={(e) => handleTaskPaste('nextDayPlan', idx, e)} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'task', e.target.value)} className={`flex-1 min-w-[200px] ${inputBase}`} required />
+                    {!isLeaveTask && (
+                      <>
+                        <select value={item.project} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'project', e.target.value)} className={`w-32 ${inputBase}`} required>
+                          <option value="" disabled>Select project</option>
+                          {allProjectOptions.map((projectName) => <option key={projectName} value={projectName}>{projectName}</option>)}
+                        </select>
+                        {item.project === 'Others' && (
+                          <input type="text" value={item.customProject} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'customProject', e.target.value)} placeholder="Specify project" className={`w-40 ${inputBase}`} required />
+                        )}
+                      </>
+                    )}
+                    {(item.jiraId || item.task.toUpperCase().includes('JIRA')) && (
+                      <input type="text" placeholder="JIRA ID" value={item.jiraId || ''} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'jiraId', e.target.value.toUpperCase())} className={`w-28 text-xs placeholder:text-slate-400 text-center text-slate-700 dark:text-slate-200 ${inputBase}`} title="JIRA ID" />
+                    )}
+                    {!isLeaveTask && <TimeInput hours={item.hours} minutes={item.minutes} onHoursChange={(e) => handleTaskChange('nextDayPlan', idx, 'hours', e.target.value)} onMinutesChange={(e) => handleTaskChange('nextDayPlan', idx, 'minutes', e.target.value)} disabled={false} />}
+                    <select value={item.priority || 'Medium'} onChange={(e) => handleTaskChange('nextDayPlan', idx, 'priority', e.target.value)} className={`w-24 ${inputBase}`}>
+                      <option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option>
+                    </select>
+                    <button type="button" onClick={() => removeTask('nextDayPlan', idx)} className="absolute right-2 top-2.5 text-red-400 hover:text-red-600 p-1.5"><X size={18} /></button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -1799,22 +1867,62 @@ function DashboardView({
     document.body.removeChild(textarea);
   };
 
-  const copyHtmlToClipboard = (elementId) => {
-    const node = document.getElementById(elementId);
-    if (!node) return showNotification('error', 'Content not found');
-    const range = document.createRange();
-    range.selectNode(node);
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    try {
+  const copyHtmlToClipboard = async (elementId) => {
+  const node = document.getElementById(elementId);
+  if (!node) {
+    showNotification('error', 'Content not found');
+    return;
+  }
+
+  try {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+      </head>
+      <body>
+        ${node.outerHTML}
+      </body>
+      </html>
+    `;
+
+    const textContent = node.innerText;
+
+    if (navigator.clipboard && window.ClipboardItem) {
+      const data = [
+        new ClipboardItem({
+          'text/html': new Blob([htmlContent], { type: 'text/html' }),
+          'text/plain': new Blob([textContent], { type: 'text/plain' })
+        })
+      ];
+
+      await navigator.clipboard.write(data);
+      showNotification('success', 'HTML copied successfully!');
+    } else {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = htmlContent;
+      document.body.appendChild(tempDiv);
+
+      const range = document.createRange();
+      range.selectNode(tempDiv);
+
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+
       document.execCommand('copy');
-      showNotification('success', 'HTML copied!');
-    } catch {
-      showNotification('error', 'Failed to copy HTML content');
+
+      selection.removeAllRanges();
+      document.body.removeChild(tempDiv);
+
+      showNotification('success', 'HTML copied successfully!');
     }
-    selection.removeAllRanges();
-  };
+  } catch (err) {
+    console.error(err);
+    showNotification('error', 'Failed to copy HTML content');
+  }
+};
 
   const generateReminderText = () => {
     if (missingUsers.length === 0) return "All members have submitted. Good job!";
@@ -2513,85 +2621,90 @@ if __name__ == '__main__':
                       <button onClick={() => copyHtmlToClipboard('email-template')} className="text-sm text-blue-600 dark:text-blue-400 hover:underline font-semibold">📋 Copy HTML</button>
                     </div>
                     <div id="email-template" className="border dark:border-slate-600 overflow-auto max-h-96 text-slate-800 dark:text-slate-200" style={{ backgroundColor: '#f8fafc' }}>
-                      <div style={{ maxWidth: '900px', margin: '0 auto', fontFamily: "'Segoe UI', Arial, sans-serif", lineHeight: '1.6', color: '#333' }}>
-                        {/* Header */}
-                        <div style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', padding: '30px 20px', textAlign: 'center', borderRadius: '8px 8px 0 0' }}>
-                          <h1 style={{ margin: 0, color: 'white', fontSize: '28px', fontWeight: 700 }}>StreetMan Scrum Status</h1>
-                          <p style={{ margin: '8px 0 0 0', color: '#e0e7ff', fontSize: '14px' }}>Daily Standup Report</p>
-                        </div>
+                      <table width="100%" cellPadding="0" cellSpacing="0" border="0" style={{ width: '100%', maxWidth: '900px', margin: '0 auto', fontFamily: "Segoe UI, Arial, sans-serif", color: '#333333', borderCollapse: 'collapse' }}>
+                        <tbody>
+                          {/* Header */}
+                          <tr>
+                            <td bgcolor="#add8e6" style={{ backgroundColor: '#add8e6', padding: '30px 20px', textAlign: 'center' }}>
+                              <h1 style={{ margin: 0, color: '#ffffff', fontSize: '28px', fontWeight: 700 }}>StreetMan Scrum Status</h1>
+                              <p style={{ margin: '8px 0 0 0', color: '#e0e7ff', fontSize: '14px' }}>
+                                Report Date: {formatDate(selectedDate)} &nbsp;|&nbsp; Scrum Master: {assignedSM?.name || 'N/A'}
+                              </p>
+                            </td>
+                          </tr>
 
-                        {/* Date & Info */}
-                        <div style={{ backgroundColor: '#f0f4ff', padding: '16px 20px', borderLeft: '4px solid #3b82f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <p style={{ margin: 0, color: '#666', fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Report Date</p>
-                            <p style={{ margin: '4px 0 0 0', color: '#1e3a8a', fontSize: '18px', fontWeight: 700 }}>{formatDate(selectedDate)}</p>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <p style={{ margin: 0, color: '#666', fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Scrum Master</p>
-                            <p style={{ margin: '4px 0 0 0', color: '#1e3a8a', fontSize: '18px', fontWeight: 700 }}>{assignedSM?.name || 'N/A'}</p>
-                          </div>
-                        </div>
+                          {/* Body */}
+                          <tr>
+                            <td bgcolor="#ffffff" style={{ backgroundColor: '#ffffff', padding: '20px' }}>
+                              <p style={{ margin: '0 0 16px 0', color: '#334155', fontSize: '15px' }}>Hi Team,</p>
+                              <p style={{ margin: '0 0 20px 0', color: '#334155', fontSize: '15px' }}>Please find the scrum status summary below.</p>
 
-                        {/* Content */}
-                        <div style={{ padding: '24px 20px', background: 'white' }}>
-                          <p style={{ margin: '0 0 20px 0', color: '#555', fontSize: '15px' }}>Hi Team,</p>
-                          <p style={{ margin: '0 0 24px 0', color: '#555', fontSize: '15px' }}>Please find the scrum status summary below.</p>
-
-                          {/* Data Table */}
-                          <table style={{ width: '100%', borderCollapse: 'collapse', margin: '20px 0', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-                            <thead>
-                              <tr style={{ background: 'linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%)', color: 'white' }}>
-                                <th style={{ padding: '14px 12px', textAlign: 'left', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid #1e3a8a', letterSpacing: '0.5px' }}>Team Member</th>
-                                <th style={{ padding: '14px 12px', textAlign: 'left', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid #1e3a8a', letterSpacing: '0.5px' }}>Yesterday's Work</th>
-                                <th style={{ padding: '14px 12px', textAlign: 'left', fontWeight: 700, fontSize: '14px', borderBottom: '3px solid #1e3a8a', letterSpacing: '0.5px' }}>Today's Plan</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {dailyData.map((row, idx) => {
-                                const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafb';
-                                const borderColor = idx === dailyData.length - 1 ? '2px solid #e5e7eb' : '1px solid #e5e7eb';
-                                if (row.status === 'LEAVE') {
-                                  return (
-                                    <tr key={idx} style={{ backgroundColor: bg }}>
-                                      <td style={{ padding: '14px 12px', borderBottom: borderColor, fontWeight: 600, color: '#1e3a8a' }}>{row.userName}</td>
-                                      <td style={{ padding: '14px 12px', borderBottom: borderColor, textAlign: 'center', background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', color: '#92400e', fontWeight: 600 }} colSpan="2">🏖️ ON LEAVE</td>
-                                    </tr>
-                                  );
-                                }
-                                const yesterday = (row.yesterdayWork || []).filter(t => t.task?.trim()).length > 0
-                                  ? (row.yesterdayWork || []).filter(t => t.task?.trim()).map((t, i) => <li key={i} style={{ margin: '4px 0', color: '#333', fontSize: '14px' }}>{t.task}</li>)
-                                  : <li style={{ margin: '4px 0', color: '#999', fontSize: '14px', fontStyle: 'italic' }}>No tasks</li>;
-                                const today = (row.todayPlan || []).filter(t => t.task?.trim()).length > 0
-                                  ? (row.todayPlan || []).filter(t => t.task?.trim()).map((t, i) => <li key={i} style={{ margin: '4px 0', color: '#333', fontSize: '14px' }}>{t.task}</li>)
-                                  : <li style={{ margin: '4px 0', color: '#999', fontSize: '14px', fontStyle: 'italic' }}>No tasks</li>;
-                                return (
-                                  <tr key={idx} style={{ backgroundColor: bg }}>
-                                    <td style={{ padding: '14px 12px', borderBottom: borderColor, fontWeight: 600, color: '#1e3a8a' }}>{row.userName}</td>
-                                    <td style={{ padding: '14px 12px', borderBottom: borderColor }}><ul style={{ margin: 0, paddingLeft: '20px' }}>{yesterday}</ul></td>
-                                    <td style={{ padding: '14px 12px', borderBottom: borderColor }}><ul style={{ margin: 0, paddingLeft: '20px' }}>{today}</ul></td>
+                              {/* Data Table */}
+                              <table width="100%" cellPadding="0" cellSpacing="0" border="0" style={{ width: '100%', borderCollapse: 'collapse', margin: '20px 0', border: '1px solid #6699CC' }}>
+                                <thead>
+                                  <tr>
+                                    <th bgcolor="#4f46e5" style={{ backgroundColor: '#add8e6', color: '#ffffff', padding: '12px', textAlign: 'left', fontSize: '14px', border: '1px solid #4f46e5' }}>Team Member</th>
+                                    <th bgcolor="#4f46e5" style={{ backgroundColor: '#add8e6', color: '#ffffff', padding: '12px', textAlign: 'left', fontSize: '14px', border: '1px solid #4f46e5' }}>Yesterday's Work</th>
+                                    <th bgcolor="#4f46e5" style={{ backgroundColor: '#add8e6', color: '#ffffff', padding: '12px', textAlign: 'left', fontSize: '14px', border: '1px solid #4f46e5' }}>Today's Plan</th>
                                   </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
+                                </thead>
+                                <tbody>
+                                  {dailyData.map((row, idx) => {
+                                    const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafb';
+                                    const borderColor = '1px solid #6699cc';
+                                    if (row.status === 'LEAVE') {
+                                      return (
+                                        <tr key={idx}>
+                                          <td bgcolor={bg} style={{ backgroundColor: bg, padding: '12px', borderBottom: borderColor, fontWeight: 600, color: '#1e3a8a' }}>{row.userName}</td>
+                                          <td bgcolor="#fef3c7" style={{ backgroundColor: '#fef3c7', padding: '12px', borderBottom: borderColor, textAlign: 'center', color: '#92400e', fontWeight: 600 }} colSpan="2">🏖️ ON LEAVE</td>
+                                        </tr>
+                                      );
+                                    }
+                                    if (
+                                      (!row.yesterdayWork || row.yesterdayWork.length === 0) &&
+                                      (!row.todayPlan || row.todayPlan.length === 0)
+                                    ) {
+                                      return (
+                                        <tr key={idx}>
+                                          <td bgcolor={bg} style={{ backgroundColor: bg, padding: '12px', borderBottom: borderColor, fontWeight: 600, color: '#1e3a8a' }}>{row.userName}</td>
+                                          <td bgcolor="#fee2e2" style={{ backgroundColor: '#fee2e2', padding: '12px', borderBottom: borderColor, textAlign: 'center', color: '#991b1b', fontWeight: 600 }} colSpan="2">⚠️ NOT FILLED</td>
+                                        </tr>
+                                      );
+                                    }
 
-                        {/* Summary */}
-                        <div style={{ padding: '16px 20px', backgroundColor: '#f0f4ff', borderTop: '1px solid #e5e7eb' }}>
-                          <p style={{ margin: 0, color: '#1e3a8a', fontSize: '13px', fontWeight: 600 }}>
-                            ✅ Total Members: <strong>{dailyData.length}</strong> | 🏖️ On Leave: <strong>{dailyData.filter(d => d.status === 'LEAVE').length}</strong>
-                          </p>
-                        </div>
+                                    const yesterday = (row.yesterdayWork || []).filter(t => t.task?.trim()).length > 0
+                                      ? (row.yesterdayWork || []).filter(t => t.task?.trim()).map((t, i) => <li key={i} style={{ margin: '4px 0', color: '#333333', fontSize: '13px' }}>{t.task}</li>)
+                                      : <li style={{ margin: '4px 0', color: '#999999', fontSize: '13px', fontStyle: 'italic' }}>No tasks tracked</li>;
+                                    const today = (row.todayPlan || []).filter(t => t.task?.trim()).length > 0
+                                      ? (row.todayPlan || []).filter(t => t.task?.trim()).map((t, i) => <li key={i} style={{ margin: '4px 0', color: '#333333', fontSize: '13px' }}>{t.task}</li>)
+                                      : <li style={{ margin: '4px 0', color: '#999999', fontSize: '13px', fontStyle: 'italic' }}>No tasks planned</li>;
+                                    return (
+                                      <tr key={idx}>
+                                        <td bgcolor={bg} style={{ backgroundColor: bg, padding: '12px', borderBottom: borderColor, fontWeight: 600, color: '#add8e6', verticalAlign: 'top' }}>{row.userName}</td>
+                                        <td bgcolor={bg} style={{ backgroundColor: bg, padding: '12px', borderBottom: borderColor, verticalAlign: 'top' }}><ul style={{ margin: 0, paddingLeft: '16px' }}>{yesterday}</ul></td>
+                                        <td bgcolor={bg} style={{ backgroundColor: bg, padding: '12px', borderBottom: borderColor, verticalAlign: 'top' }}><ul style={{ margin: 0, paddingLeft: '16px' }}>{today}</ul></td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
 
-                        {/* Footer */}
-                        <div style={{ background: 'linear-gradient(135deg, #111827 0%, #1f2937 100%)', padding: '24px 20px', textAlign: 'center', borderRadius: '0 0 8px 8px', color: 'white' }}>
-                          <p style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>{assignedSM?.name || 'StreetMan Scrum Automation'}</p>
-                          <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: '#d1d5db' }}>Automated daily standup reporting system</p>
-                          <p style={{ margin: 0, fontSize: '11px', color: '#9ca3af', borderTop: '1px solid #374151', paddingTop: '12px' }}>
-                            Generated on {new Date().toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
+                              <p style={{ margin: '20px 0 8px 0', color: '#334155', fontSize: '15px' }}>Thanks,</p>
+                              <p style={{ margin: 0, color: '#334155', fontSize: '15px', fontWeight: 600 }}>{assignedSM?.name || 'StreetMan Scrum Automation'}</p>
+                            </td>
+                          </tr>
+
+                          {/* Footer */}
+                          <tr>
+                            <td bgcolor="#0f172a" style={{ backgroundColor: '#add8e6', color: '#ffffff', padding: '24px 20px', textAlign: 'center' }}>
+                              <p style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 700, color: '#ffffff', fontFamily: "Segoe UI, Arial, sans-serif" }}>
+                                StreetMan Scrum Automation 🤖
+                              </p>
+                              <p style={{ margin: 0, fontSize: '12px', color: '#ffffff', fontFamily: "Segoe UI, Arial, sans-serif" }}>Generated on {new Date().toLocaleString()}</p>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
@@ -2656,7 +2769,7 @@ function ReportsView({ data, showNotification, users }) {
 
     const svgSize = svg.getBoundingClientRect();
     const titleHeight = titleText ? 40 : 0;
-    
+
     let legendHeight = 0;
     if (legendData && legendData.length > 0) {
       // Dynamically calculate required lines for the legend
@@ -2682,50 +2795,50 @@ function ReportsView({ data, showNotification, users }) {
     canvas.height = (svgSize.height + titleHeight + legendHeight) * 2;
     const ctx = canvas.getContext('2d');
     ctx.scale(2, 2);
-    
+
     const isDark = document.documentElement.classList.contains('dark');
     ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
     ctx.fillRect(0, 0, svgSize.width, svgSize.height + titleHeight + legendHeight);
-    
+
     if (titleText) {
       ctx.fillStyle = isDark ? '#f8fafc' : '#0f172a';
       ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(titleText, svgSize.width / 2, 25);
     }
-    
+
     const img = new Image();
     img.onload = () => {
       ctx.drawImage(img, 0, titleHeight);
-      
+
       if (legendData && legendData.length > 0) {
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'left';
         const startY = titleHeight + svgSize.height + 20;
         let currentX = 20;
         let currentY = startY;
-        
+
         legendData.forEach((item, index) => {
           const color = legendColors ? legendColors[index % legendColors.length] : '#3b82f6';
           ctx.fillStyle = color;
           ctx.beginPath();
           ctx.arc(currentX + 5, currentY - 4, 5, 0, 2 * Math.PI);
           ctx.fill();
-          
-          ctx.fillStyle = isDark ? '#cbd5e1' : '#334155';
+
+          ctx.fillStyle = isDark ? '#6699cc' : '#334155';
           const text = `${item.name} (${item.value}h)`;
           ctx.fillText(text, currentX + 15, currentY);
-          
+
           const textWidth = ctx.measureText(text).width;
           currentX += textWidth + 30;
-          
+
           if (currentX > svgSize.width - 80) {
             currentX = 20;
             currentY += 20;
           }
         });
       }
-      
+
       const a = document.createElement('a');
       a.download = filename;
       a.href = canvas.toDataURL('image/png');
@@ -3584,6 +3697,28 @@ function AdminView({ users, setUsers, projectsState, setProjects, teamsState, se
     showNotification('success', 'New member added successfully.');
   };
 
+  const handleRemoveMember = async (user) => {
+    if (user.role === 'ADMIN') {
+      showNotification('error', 'Cannot remove ADMIN user.');
+      return;
+    }
+    if (appConfigState.currentScrumMasterId === user.id) {
+      showNotification('error', 'Cannot remove the current Scrum Master. Reassign first.');
+      return;
+    }
+    const confirmed = await showConfirm(`Are you sure you want to remove ${user.name}?`, 'Remove Member');
+    if (!confirmed) return;
+
+    setUsers(prev => prev.filter(u => u.id !== user.id));
+    recordAudit({
+      userName: currentUserProfile.name,
+      action: 'Removed Member',
+      targetDate: getTodayString(),
+      details: `Removed member ${user.name} (ID: ${user.id}).`
+    });
+    showNotification('success', 'Member removed successfully.');
+  };
+
   const handleAddTeam = () => {
     if (!newTeam.trim()) return;
     if (teamsState.includes(newTeam.trim())) {
@@ -3671,9 +3806,9 @@ function AdminView({ users, setUsers, projectsState, setProjects, teamsState, se
             <PlusCircle size={16} /> Add Member
           </button>
         </div>
-        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 mt-6">Assign Weekly Scrum Master</h3>
+        <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 mt-6">Manage Members & Assign Scrum Master</h3>
         <div className="space-y-2">
-          {users.filter(u => u.role !== 'ADMIN').map(user => (
+          {users.map(user => (
             <div key={user.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-xs">
@@ -3703,6 +3838,14 @@ function AdminView({ users, setUsers, projectsState, setProjects, teamsState, se
                 >
                   Change PIN
                 </button>
+                {user.role !== 'ADMIN' && (
+                  <button
+                    onClick={() => handleRemoveMember(user)}
+                    className="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 px-3 py-1.5 rounded transition"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             </div>
           ))}
